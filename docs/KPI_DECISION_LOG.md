@@ -1,0 +1,64 @@
+# KPI decision log: funnel conversion rate
+
+Working notes. The final wording of `ASSUMPTIONS.md`, `KPI_DEFINITIONS.md` and the
+recommendation to both directors is written by the human.
+
+## What the disagreement actually is
+
+The Regional Marketing Director (UK and Ireland) and the Sales Operations Director
+(International) define conversion on four independent axes. Only the first and part of the
+second genuinely collide. Marketing measures acquisition efficiency by spend cohort. Sales
+Ops measures agent effectiveness on workable opportunities, by completion month.
+
+| Axis | Marketing Director | Sales Ops Director | Real conflict? | Handling |
+| --- | --- | --- | --- | --- |
+| Denominator | All leads captured | Connected calls | Yes: lead grain vs call grain | Two separately named measures |
+| Population | All leads, no dedup, no consent filter | Exclude duplicates; exclude leads created outside regional business hours | Partly: dedup is a data-quality fact; business hours is an Ops-only scope | Dedup everywhere (the brief's measure 2 requires it). Business hours is a flag on `fact_lead_funnel`, used only by the Ops measure |
+| Attribution | Campaign on the lead at creation (first touch) | Agent on the last call before the application date | No: different dimensions | Both keys on `fact_lead_funnel` (`campaign_key`, `last_call_agent_key`) |
+| Period | Month the lead was created | Month the policy started | No: two roles of one date | Role-playing date dimension; `USERELATIONSHIP` for the policy-start role |
+
+A call-grain ratio counts a lead once per connected call, so it is a productivity ratio,
+not a share of opportunities. Forcing either grain on the other director would silently
+change what the number means, which the BI Manager's note forbids.
+
+## Indicative size of the gap (pandas pass, Q2 2026, all regions; reproduce in the pipeline)
+
+- Marketing-style, raw leads: 9.9% (4,766 linked policies / 47,987 leads).
+- Marketing-style, deduplicated leads: 10.1% (757 duplicate leads removed, 1.6%).
+- Ops-style (policies started in Q2 / connected calls): 20.5%.
+- Leads created inside weekday business hours: about 38%; the Ops filter removes about 62%.
+- April-created leads whose policy starts in April: 470 of 1,492.
+
+## Options considered
+
+| Option | Verdict |
+| --- | --- |
+| A. Adopt Marketing's definition for everyone | Rejected: overrides Ops on a metric tied to commission and coaching |
+| B. Adopt Ops's definition for everyone | Rejected: dilutes channel accountability; breaks the brief's `Leads (Deduplicated)` base |
+| C. Two certified, explicitly named measures at their own grains, plus a published reconciliation | **Chosen** (confirmed by the human). Allowed by the BI Manager's note |
+| D. One measure with a slicer switching definitions | Rejected: two answers behind one name |
+
+## Decision (option C)
+
+- `Lead to Policy Conversion Rate`: lead grain; policies linked to a surviving lead over
+  `Leads (Deduplicated)`; anchored on lead-created date; first-touch campaign. The funnel
+  headline; shares its denominator with `Cost Per Lead (GBP)`.
+- `Connected Call to Policy Conversion Rate`: call grain; connected dispositions
+  (CONNECTED, QUOTED, APPLICATION_STARTED, SOLD); non-duplicate leads created in business
+  hours; anchored on policy-start date; last-call agent attribution.
+- A reconciliation view stepping from one number to the other one axis at a time.
+- BI Manager rules: one certified measure per KPI; both grains named and documented; the
+  words "Conversion Rate" never appear on their own in a measure name.
+
+## How to reverse it
+
+Every axis is a column or relationship in the model, not baked into the pipeline.
+Changing a definition means editing one DAX measure, its description, its row in
+`KPI_DEFINITIONS.md`, and the assumptions log entry. No data rebuild.
+
+## Still to settle with data
+
+- Whether NTU, CANCELLED and LAPSED policies count (the legacy procedure excludes NTU).
+- What 267 DECLINED-yet-INFORCE policies mean for policy counts.
+- Whether `attribution_window_days` limits which policies count for a lead (measure 10).
+- How "International" maps to regions (assumed CA, AU, US).

@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Java (required for PySpark)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest
+
+      - name: Data-quality gate
+        run: |
+          # Placeholder command. Replace with the real gate before this passes.
+          # It must fail the build if the row count in silver.dq_exception,
+          # for the run just produced, exceeds the threshold stated in
+          # docs/RUNBOOK.md's "Data-quality gates and thresholds" section.
+          # A gate that always exits 0 does not satisfy this requirement.
+          echo "TODO: implement the data-quality gate against silver.dq_exception" && exit 1

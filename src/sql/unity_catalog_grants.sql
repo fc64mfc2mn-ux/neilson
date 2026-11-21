@@ -1,0 +1,19 @@
+-- src/sql/unity_catalog_grants.sql
+--
+-- Must contain, written to run in a real Databricks workspace:
+--   1. Three-level namespace DDL: CREATE CATALOG / CREATE SCHEMA / CREATE
+--      TABLE (or equivalent) statements naming the catalog, schema and
+--      table for this model's gold layer, matching the namespace described
+--      in docs/platform_architecture.md.
+--   2. GRANT statements mapping the four roles named in docs/GOVERNANCE.md
+--      (Regional_Analyst, Marketing_Analyst_NoPII, Ops_Team_Manager,
+--      Underwriting_Reviewer) to the privileges each needs on that
+--      namespace, consistent with the entitlements matrix in
+--      docs/GOVERNANCE.md.
+--   3. At least one row filter or column mask function (CREATE FUNCTION plus
+--      ALTER TABLE ... SET ROW FILTER, or ALTER TABLE ... ALTER COLUMN ...
+--      SET MASK), enforcing one of the access rules from the entitlements
+--      matrix at the SQL layer rather than only in the semantic model.
+--
+-- This is tested through the SQL definition, not through execution against a
+-- live workspace.

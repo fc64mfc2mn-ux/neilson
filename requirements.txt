@@ -1,0 +1,10 @@
+# Pinned for Python 3.11. Install with: pip install -r requirements.txt
+# Java 17 must be installed separately and JAVA_HOME set before PySpark will run.
+
+pyspark==3.5.1
+delta-spark==3.2.0
+pytest==8.2.2
+ruff==0.5.0
+
+# Optional, only needed if you want PySpark DataFrame assertions in your own tests.
+# chispa==0.9.4

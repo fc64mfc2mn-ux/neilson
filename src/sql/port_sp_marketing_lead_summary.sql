@@ -1,0 +1,16 @@
+-- src/sql/port_sp_marketing_lead_summary.sql
+--
+-- Must be a Spark SQL (or PySpark, called from src/) port of the T-SQL
+-- stored procedure at data/legacy/sp_MarketingLeadSummary.sql: the current
+-- as-is channel CPL and conversion report.
+--
+-- Read the legacy procedure carefully before porting it line by line. It
+-- contains three behavioural quirks that a naive, literal translation would
+-- carry over unchanged. Find them by comparing what the procedure's logic
+-- actually computes against what it is supposed to compute, not by
+-- assuming a literal translation is correct. List each difference you find,
+-- and its effect on the result, in your submission.
+--
+-- tests/test_legacy_parity.py must assert that your ported result differs
+-- from a naive line-by-line translation, and must state the expected
+-- direction and approximate size of each difference.

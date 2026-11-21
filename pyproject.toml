@@ -1,0 +1,22 @@
+[project]
+name = "northgate-funnel"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Reasonable default rule set for a data engineering repo:
+# E/W  pycodestyle, F  pyflakes, I  import sorting, UP  pyupgrade,
+# B    bugbear (common bug patterns), SIM  simplification,
+# C4   comprehension cleanups, N  naming conventions.
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "N"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

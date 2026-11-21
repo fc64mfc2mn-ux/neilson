@@ -1,0 +1,19 @@
+// DAX for all Power BI measures, as text, so the reviewer can read it without
+// opening the .pbix. Add each measure below under its name, matching the
+// measure's description field in the model and its row in docs/KPI_DEFINITIONS.md.
+//
+// Required measures (fill in the DAX for each):
+//   1.  Marketing Spend (GBP)
+//   2.  Leads (Deduplicated)
+//   3.  Cost Per Lead (GBP)
+//   4.  Contact Rate
+//   5.  Lead to Policy Conversion Rate
+//   6.  Average Annual Premium (GBP)
+//   7.  Average Handle Time (Seconds)
+//   8.  Grade of Service
+//   9.  Time to First Call (Median Minutes)
+//   10. Cost Per Policy (GBP)
+//
+// Stretch model objects (fill in if attempted):
+//   Cost Per Lead (GBP) MoM %
+//   CPL vs Target Variance (GBP)

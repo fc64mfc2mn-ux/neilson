@@ -1,7 +1,9 @@
 """Land all twelve input files into bronze.
 
 Bronze is append-only, all columns typed as string, plus `_ingest_ts`,
-`_source_file` and `_row_hash`. No cleansing in bronze. Produces
+`_source_file`, `_row_hash` and `_source_row` (the record's position in the
+file, from 1: data row n of a CSV is line n + 1, after the header). No
+cleansing in bronze. Produces
 `bronze.leads_raw`, `bronze.consent_events_raw`, `bronze.calls_raw`,
 `bronze.policies_raw`, `bronze.marketing_spend_raw`, `bronze.campaigns_raw`,
 `bronze.agents_raw`, `bronze.fx_rates_raw`, `bronze.ref_channel_raw`,
@@ -24,7 +26,7 @@ from pathlib import Path
 
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
-from pyspark.sql.types import ArrayType, MapType, StructType
+from pyspark.sql.types import ArrayType, LongType, MapType, StructField, StructType
 
 from src.common.config import resolve_source_path
 from src.common.tables import append_table, read_table, table_exists
@@ -79,9 +81,11 @@ def add_bronze_metadata(
     `_row_hash` is SHA-256 over every source column, in file order, joined with a
     separator that cannot occur in the data and with nulls encoded as a sentinel.
     So identical rows hash identically, and a null and an empty string differ.
+    `_source_row` is not hashed, so a row's hash does not depend on its position.
     """
     ts = ingest_ts or datetime.now(UTC).replace(tzinfo=None)
-    values = [F.coalesce(F.col(f"`{c}`"), F.lit(NULL_SENTINEL)) for c in df.columns]
+    source_cols = [c for c in df.columns if c != "_source_row"]
+    values = [F.coalesce(F.col(f"`{c}`"), F.lit(NULL_SENTINEL)) for c in source_cols]
     return (
         df.withColumn("_ingest_ts", F.lit(ts).cast("timestamp"))
         .withColumn("_source_file", F.lit(source_file))
@@ -103,6 +107,19 @@ def read_source(spark: SparkSession, config: dict, source_name: str) -> DataFram
         options["primitivesAsString"] = "true"
         return to_all_strings(spark.read.options(**options).json(path))
     raise ValueError(f"Unsupported format {fmt!r} for source {source_name!r}")
+
+
+def add_source_row(df: DataFrame) -> DataFrame:
+    """Add `_source_row`: 1-based record position in file order.
+
+    Must be applied straight after the read, before any shuffle. `zipWithIndex`
+    numbers rows by partition, then within partition, and a single file's
+    partitions follow its byte order, so the number is the file order. The tests
+    check it against an independent read of the file.
+    """
+    schema = StructType([*df.schema.fields, StructField("_source_row", LongType(), False)])
+    numbered = df.rdd.zipWithIndex().map(lambda pair: (*pair[0], pair[1] + 1))
+    return df.sparkSession.createDataFrame(numbered, schema)
 
 
 def batch_fingerprint(df: DataFrame) -> str:
@@ -142,7 +159,8 @@ def ingest_source(spark: SparkSession, config: dict, source_name: str) -> Ingest
     source_file = Path(resolve_source_path(config, source_name)).name
     ingest_ts = datetime.now(UTC).replace(tzinfo=None)
 
-    batch = add_bronze_metadata(read_source(spark, config, source_name), source_file, ingest_ts)
+    raw = add_source_row(read_source(spark, config, source_name))
+    batch = add_bronze_metadata(raw, source_file, ingest_ts)
     batch = batch.cache()
     rows_read = batch.count()
     fingerprint = batch_fingerprint(batch)

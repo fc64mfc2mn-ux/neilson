@@ -241,3 +241,23 @@ step 10.
   of ASSUMPTIONS entry 5 (timezone evidence), because I staged the whole file to add entry
   15 without checking its diff. The commit message does not mention it. Not rewritten
   (no amending); recorded here. From now on, inspect each file's full diff before staging.
+
+### 2026-11-21  Bronze `_source_row` for SCD2 file order
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): add a deterministic `_source_row` (file order from 1) to bronze; test it
+against the true line numbers for dim_agent and a larger file; keep idempotency; record
+it in ASSUMPTIONS 15; make assumption 8 use it.
+What it produced: `add_source_row` (zipWithIndex straight after the read, before any
+shuffle), left out of `_row_hash`, so fingerprints and idempotency are unchanged.
+Defined as the data-record number: data row n of a CSV is file line n + 1 (the header is
+line 1). Tests, written first and confirmed failing: a unit test, plus real-data
+comparisons against an independent Python read for dim_agent, leads (48,000), calls_ca_us
+(23,000) and consent_events; AG0008 at data rows 8 and 43 (lines 9 and 44).
+`silver.agent` carries `source_row`; a test pins the version order of the three
+duplicated agents. ASSUMPTIONS 8 and 15 updated (one line each).
+What was wrong: my first unit test used a source name with no bronze table mapping, so it
+would have failed for the wrong reason; caught when reviewing it before running. A test
+edit script failed against text ruff had reformatted; re-read the file and re-applied.
+Note: an existing local lakehouse keeps its old batches without `_source_row`, because
+the file fingerprints are unchanged. Delete `lakehouse/` once to pick it up.
+Test time is now a real problem: the step 6 test file takes about 5.5 minutes.

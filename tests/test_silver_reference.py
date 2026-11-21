@@ -33,7 +33,7 @@ CAMPAIGN_COLS = (
 AGENT_COLS = (
     "agent_id string, agent_name string, agent_email string, region_code string, team string, "
     "seniority_band string, hire_date string, fte string, active_flag string, "
-    "manager_name string, _row_hash string"
+    "manager_name string, _row_hash string, _source_row long"
 )
 
 
@@ -118,10 +118,49 @@ def test_missing_fx_rate_is_detected_not_nulled(spark):
 def test_conform_agents_keeps_versions_and_fixes_region_and_team(spark):
     raw = spark.createDataFrame(
         [
-            ("A1", "n", "e", "CA", "CA-Team-Beta", "Trainee", "2020-07-09", "0.80", "1", "m", "h1"),
-            ("A1", "n", "e", "CA", "UK-Team-Alpha", "Core", "2020-07-09", "0.80", "1", "m", "h2"),
-            ("A2", "n", "e", None, "UK-Team-Beta", "Core", "2018-09-22", "1.00", "0", "m", "h3"),
-            ("A3", "n", "e", "US", "US-Team-Alpha", "Senior", "2018-07-15", "1.00", "1", "m", "h4"),
+            (
+                "A1",
+                "n",
+                "e",
+                "CA",
+                "CA-Team-Beta",
+                "Trainee",
+                "2020-07-09",
+                "0.80",
+                "1",
+                "m",
+                "h1",
+                1,
+            ),
+            (
+                "A1",
+                "n",
+                "e",
+                "CA",
+                "UK-Team-Alpha",
+                "Core",
+                "2020-07-09",
+                "0.80",
+                "1",
+                "m",
+                "h2",
+                4,
+            ),
+            ("A2", "n", "e", None, "UK-Team-Beta", "Core", "2018-09-22", "1.00", "0", "m", "h3", 2),
+            (
+                "A3",
+                "n",
+                "e",
+                "US",
+                "US-Team-Alpha",
+                "Senior",
+                "2018-07-15",
+                "1.00",
+                "1",
+                "m",
+                "h4",
+                3,
+            ),
         ],
         AGENT_COLS,
     )
@@ -129,10 +168,12 @@ def test_conform_agents_keeps_versions_and_fixes_region_and_team(spark):
     rows = agents.collect()
     assert len(rows) == 4  # both versions of A1 kept
 
-    a1 = sorted((r.seniority_band, r.team, r.team_raw) for r in rows if r.agent_id == "A1")
+    a1 = sorted(
+        (r.source_row, r.seniority_band, r.team, r.team_raw) for r in rows if r.agent_id == "A1"
+    )
     assert a1 == [
-        ("Core", "CA-Team-Beta", "UK-Team-Alpha"),
-        ("Trainee", "CA-Team-Beta", "CA-Team-Beta"),
+        (1, "Trainee", "CA-Team-Beta", "CA-Team-Beta"),
+        (4, "Core", "CA-Team-Beta", "UK-Team-Alpha"),
     ]
     a2 = next(r for r in rows if r.agent_id == "A2")
     assert (a2.region_code, a2.region_code_raw) == ("UK", None)
@@ -226,6 +267,19 @@ def test_real_agents_keep_both_versions_and_have_regions(spark, real_reference):
     assert agents.where(F.col("region_code").isNull()).count() == 0
     assert agents.where(F.substring("team", 1, 2) != F.col("region_code")).count() == 0
     assert _exceptions(spark, config, "agent_null_region").count() == 2
+    # Assumption 8: file order (source_row) orders the versions for SCD2 at step 10.
+    ordered = {
+        agent: [
+            (r.source_row, r.seniority_band)
+            for r in agents.where(F.col("agent_id") == agent).orderBy("source_row").collect()
+        ]
+        for agent in ("AG0008", "AG0023", "AG0037")
+    }
+    assert ordered == {
+        "AG0008": [(8, "Trainee"), (43, "Core")],
+        "AG0023": [(23, "Core"), (44, "Senior")],
+        "AG0037": [(37, "Trainee"), (45, "Core")],
+    }
     team_fixes = _exceptions(spark, config, "agent_team_region_mismatch").collect()
     assert {r.key_value for r in team_fixes} == {"AG0008", "AG0037"}
     assert _exceptions(spark, config, "agent_duplicate_version").count() == 6

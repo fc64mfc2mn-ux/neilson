@@ -11,9 +11,9 @@ Decisions (docs/ASSUMPTIONS.md, docs/DEFECT_REGISTER.md):
 - Campaigns ending before they start are flagged and kept (defect 9).
 - A missing FX rate for a reporting month is an error, never a null (defect 12).
 - Agents: both versions of a duplicated agent are kept (defect 18; dates come
-  at step 10). A null region is taken from the team prefix (defect 18), and a
-  team that contradicts the region is replaced by the agent's other team
-  (defect 27).
+  at step 10, ordered by `source_row`, the roster file position: assumption 8).
+  A null region is taken from the team prefix (defect 18), and a team that
+  contradicts the region is replaced by the agent's other team (defect 27).
 """
 
 from __future__ import annotations
@@ -175,6 +175,7 @@ def conform_agents(
         (F.col("active_flag") == "1").alias("active_flag"),
         F.col("manager_name"),
         F.col("_row_hash").alias("source_row_hash"),
+        F.col("_source_row").alias("source_row"),
     )
     prefix = F.substring("team_raw", 1, 2)
     with_region = typed.withColumn(
@@ -204,7 +205,7 @@ def conform_agents(
     columns = [
         "agent_id", "agent_name", "agent_email", "region_code", "region_code_raw", "team",
         "team_raw", "seniority_band", "hire_date", "fte", "active_flag", "manager_name",
-        "source_row_hash",
+        "source_row_hash", "source_row",
     ]  # fmt: skip
     return agents.select(*columns), region_fixes, team_fixes, versions
 

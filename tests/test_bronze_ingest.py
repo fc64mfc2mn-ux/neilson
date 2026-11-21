@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import json
 import re
 from pathlib import Path
 
@@ -19,7 +21,8 @@ from src.bronze.ingest import (
 from src.common.tables import read_table
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-METADATA = ("_ingest_ts", "_source_file", "_row_hash")
+METADATA = ("_ingest_ts", "_source_file", "_row_hash", "_source_row")
+NON_STRING_METADATA = {"_ingest_ts", "_source_row"}
 
 
 def _config(tmp_path: Path, sources: dict) -> dict:
@@ -72,6 +75,64 @@ def test_json_nested_values_become_json_strings(spark, tmp_path):
     assert (row.id, row.ok) == ("1", "true")
     # primitivesAsString keeps nested primitives as text as well: no typing in bronze.
     assert row.meta.replace(" ", "") == '{"a":"2"}'
+
+
+# ---------------------------------------------------------------- source row number
+
+
+def test_source_row_is_file_order_from_one(spark, tmp_path):
+    path = tmp_path / "leads.csv"
+    config = _config(tmp_path, {"leads": _csv_source(path, "id,v\nb,2\na,1\nb,2\nc,3\n")})
+    ingest_source(spark, config, "leads")
+    rows = read_table(spark, config, "bronze.leads_raw").orderBy("_source_row").collect()
+    assert [(r._source_row, r.id) for r in rows] == [(1, "b"), (2, "a"), (3, "b"), (4, "c")]
+    assert rows[0]._row_hash == rows[2]._row_hash  # row number is not part of the hash
+
+
+def _file_records(path: Path) -> list[tuple]:
+    """Source records in file order, read independently of Spark."""
+    if path.suffix == ".json":
+        return [(str(r["event_id"]),) for r in json.loads(path.read_text(encoding="utf-8"))]
+    with path.open(newline="", encoding="utf-8") as fh:
+        return [tuple(row) for row in csv.reader(fh)][1:]  # data rows; header is line 1
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("source_name", "table"),
+    [
+        ("dim_agent", "bronze.agents_raw"),
+        ("leads", "bronze.leads_raw"),
+        ("calls_ca_us", "bronze.calls_raw"),
+        ("consent_events", "bronze.consent_events_raw"),
+    ],
+)
+def test_source_row_equals_record_position_in_file(spark, real_bronze, source_name, table):
+    config = real_bronze.config
+    path = Path(config["sources"][source_name]["local_path"])
+    expected = _file_records(path)
+    df = latest_batch(read_table(spark, config, table)).where(F.col("_source_file") == path.name)
+    if path.suffix == ".json":
+        cols = ["event_id"]
+    else:
+        with path.open(newline="", encoding="utf-8") as fh:
+            cols = next(csv.reader(fh))
+    got = [
+        tuple("" if r[c] is None else r[c] for c in cols)
+        for r in df.orderBy("_source_row").collect()
+    ]
+    rows = [r._source_row for r in df.select("_source_row").collect()]
+    assert sorted(rows) == list(range(1, len(expected) + 1))
+    assert got == expected  # row n in bronze is data row n of the file (line n + 1)
+
+
+@pytest.mark.slow
+def test_agent_duplicates_sit_at_their_file_lines(spark, real_bronze):
+    config = real_bronze.config
+    agents = latest_batch(read_table(spark, config, "bronze.agents_raw"))
+    rows = agents.where("agent_id = 'AG0008'").orderBy("_source_row").collect()
+    # AG0008 is on file lines 9 and 44, so data rows 8 and 43.
+    assert [(r._source_row, r.team) for r in rows] == [(8, "CA-Team-Beta"), (43, "UK-Team-Alpha")]
 
 
 # ---------------------------------------------------------------- idempotent append
@@ -156,7 +217,7 @@ def test_bronze_tables_have_exact_names_and_string_columns(spark, real_bronze):
         df = read_table(spark, config, name)
         assert set(METADATA) <= set(df.columns), name
         for field in df.schema.fields:
-            if field.name != "_ingest_ts":
+            if field.name not in NON_STRING_METADATA:
                 assert isinstance(field.dataType, StringType), (name, field.name)
 
 

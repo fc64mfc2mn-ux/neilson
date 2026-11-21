@@ -57,8 +57,8 @@ confirm or overturn. The query and the result will be recorded against the entry
 
 8. **SCD2 effective dates.** *Ambiguity:* some agents appear twice with a different team
    or seniority and no dates. *Options:* use the first-seen load date; use file row
-   order; keep current state only. *Choice:* an approximation. The earlier file row is
-   valid from 2026-01-01 to 2026-03-31; the later row is current from 2026-04-01, the
+   order; keep current state only. *Choice:* an approximation. The earlier file row (lower
+   bronze `_source_row`) is valid from 2026-01-01 to 2026-03-31; the later row is current from 2026-04-01, the
    start of the reporting period. The later rows for AG0008 (CA) and AG0037 (AU) name UK
    teams, which do not match their region. Those team values are quarantined and the
    earlier team is kept (defect 27). *Reason:* the source has no dates, so the proxy is
@@ -118,7 +118,9 @@ confirm or overturn. The query and the result will be recorded against the entry
     `_ingest_ts`; its content fingerprint goes in `bronze.ingest_log`. An unchanged file
     appends nothing, a changed file appends a new batch, and silver reads the latest
     batch per file. *Reason:* keeps bronze append-only and auditable, and makes reruns
-    idempotent. *Reverse:* delete the file's `bronze.ingest_log` rows to force a reload.
+    idempotent. Bronze also stores `_source_row`, the record's position in its file
+    (from 1, header excluded), outside `_row_hash`. *Reverse:* delete the file's
+    `bronze.ingest_log` rows to force a reload.
 
 16. **Agents with no region.** *Ambiguity:* AG0007 and AG0035 have no roster region.
     *Options:* leave `UNKNOWN`; use the team prefix. *Choice:* team prefix (UK). *Reason:*

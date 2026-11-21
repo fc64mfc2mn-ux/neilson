@@ -165,3 +165,24 @@ What was wrong or changed, and how I caught it:
   PySpark alias.
 Open: the bronze tests take about 3 minutes (many small Delta writes). Acceptable for
 now; revisit if CI time matters.
+
+### 2026-11-21  Step 5: DQ framework
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt: "go" (step 5). Mid-task the human added that every exception must carry "a defect_id
+that matches the number in DEFECT_REGISTER.md, a severity, the source table and row key,
+the rule name and the run id".
+What it produced: `src/common/dq.py` with `write_dq_exception` (the brief's five contract
+columns, with `check_name` as the rule name, then `defect_id`, `run_id`, `action`
+(quarantined, flagged or corrected) and an optional `detail`), plus `read_dq_exceptions`
+(current run or all runs), `quarantined_count` and `assert_reconciled`, so every silver
+stage uses one reconciliation check. `defect_id` is required and validated against the
+register's numbers. `tests/test_dq.py`: 13 tests, written first and confirmed failing.
+Differs from the reference: the reference wrote by table name only (lost between
+processes) and had no run id, so silver reruns would have doubled the exception count
+the DQ gate reads. It also had no defect link and no quarantined/flagged distinction,
+which reconciliation needs.
+What was wrong or changed, and how I caught it: my first version had no `defect_id`; the
+human's mid-task requirement added it, and the tests were updated before the code.
+`write_dq_exception` now takes `config` as an extra keyword argument, because tables are
+path-based.
+Check: pytest (full suite) green; ruff clean.

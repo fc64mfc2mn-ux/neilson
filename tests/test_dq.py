@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 from pyspark.sql.types import IntegerType, StringType, TimestampType
 
+import src.common.dq as dq
 from src.common.dq import (
+    CHECK_DEFECTS,
     CONTRACT_COLUMNS,
     DQ_TABLE,
     ReconciliationError,
@@ -154,6 +156,42 @@ def test_defect_ids_match_the_register():
     ids = defect_ids()
     assert ids == set(range(1, len(ids) + 1))  # numbered 1..N with no gaps
     assert 27 in ids
+
+
+def test_original_five_positional_arguments_still_work(spark, tmp_path, monkeypatch):
+    """The starter stub's call shape: no defect_id, no config."""
+    config = _config(tmp_path, run_id="adhoc")
+    monkeypatch.setattr(dq, "default_config", lambda: config)
+    one = spark.createDataFrame([("LD-1",)], "lead_id string")
+
+    written = write_dq_exception(one, "lead_pk_conflict", "bronze.leads_raw", "lead_id", "error")
+
+    assert written == 1
+    row = read_table(spark, config, DQ_TABLE).collect()[0]
+    assert (row.check_name, row.source_table, row.key_value, row.severity) == (
+        "lead_pk_conflict",
+        "bronze.leads_raw",
+        "LD-1",
+        "error",
+    )
+    assert row.defect_id == CHECK_DEFECTS["lead_pk_conflict"] == 2
+
+
+def test_unmapped_check_name_without_defect_id_fails(spark, tmp_path, rows):
+    with pytest.raises(ValueError, match="no registered defect"):
+        write_dq_exception(rows, "not_a_rule", "t", "lead_id", "error", config=_config(tmp_path))
+
+
+def test_every_mapped_check_points_at_a_registered_defect():
+    assert CHECK_DEFECTS, "mapping must not be empty"
+    assert set(CHECK_DEFECTS.values()) <= defect_ids()
+
+
+def test_default_config_is_the_committed_run_config():
+    config = dq.default_config()
+    assert config["environment"] == "local"
+    assert len(config["sources"]) == 12
+    assert config["run_id"] == "adhoc"
 
 
 def test_assert_reconciled():

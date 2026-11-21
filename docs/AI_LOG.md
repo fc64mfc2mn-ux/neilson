@@ -186,3 +186,20 @@ human's mid-task requirement added it, and the tests were updated before the cod
 `write_dq_exception` now takes `config` as an extra keyword argument, because tables are
 path-based.
 Check: pytest (full suite) green; ruff clean.
+
+### 2026-11-21  write_dq_exception: starter call shape restored
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): check whether the brief specifies the signature; if anything could call
+it with the original five arguments, make that work unchanged.
+Finding: the brief does not specify the signature ("exact names, we check" covers tables
+and measures), but the starter stub defines five positional arguments, and a reviewer
+could call it that way.
+Change: `defect_id` and `config` are now optional. `defect_id` comes from `CHECK_DEFECTS`
+(rule name -> register number, kept in dq.py next to `defect_ids()`); an unmapped rule
+name still fails. `config` defaults to the committed config.yaml, anchored at the repo
+root, with run id `adhoc`. 4 new tests, written first and confirmed failing; the
+five-argument test redirects the default config to a temp folder, so it never writes
+into the real lakehouse.
+What was wrong: my step 5 version made two required keyword arguments a condition of
+calling the starter function, which broke the starter's call shape. The human caught it
+in review.

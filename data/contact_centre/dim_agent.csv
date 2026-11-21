@@ -1,0 +1,46 @@
+agent_id,agent_name,agent_email,region_code,team,seniority_band,hire_date,fte,active_flag,manager_name
+AG0001,Glenn White,glenn.white@northgatelife.example,US,US-Team-Alpha,Senior,2018-07-15,1.00,1,Ann Richards-Turner
+AG0002,Charlene Kaur,charlene.kaur@northgatelife.example,CA,CA-Team-Alpha,Senior,2025-01-21,1.00,1,Ann Richards-Turner
+AG0003,Ryan Humphreys,ryan.humphreys@northgatelife.example,CA,CA-Team-Beta,Core,2021-07-09,1.00,1,Miss Aimee Rose
+AG0004,Emily Smith,emily.smith@northgatelife.example,AU,AU-Team-Alpha,Core,2022-04-07,1.00,1,Ann Richards-Turner
+AG0005,Jason Clark,jason.clark@northgatelife.example,US,US-Team-Alpha,Core,2023-09-25,0.50,1,Ann Richards-Turner
+AG0006,Anna Smith-Walker,anna.smith-walker@northgatelife.example,UK,UK-Team-Gamma,Trainee,2022-02-18,1.00,1,Eleanor Mason
+AG0007,Henry Smith,henry.smith@northgatelife.example,,UK-Team-Beta,Core,2018-09-22,1.00,0,Miss Aimee Rose
+AG0008,Karen Cooke-Johnson,karen.cooke-johnson@northgatelife.example,CA,CA-Team-Beta,Trainee,2020-07-09,0.80,1,Miss Aimee Rose
+AG0009,Julie Khan,julie.khan@northgatelife.example,AU,AU-Team-Alpha,Senior,2019-02-25,1.00,1,Ann Richards-Turner
+AG0010,Jennifer Mitchell,jennifer.mitchell@northgatelife.example,AU,AU-Team-Alpha,Core,2018-08-09,1.00,0,Ann Richards-Turner
+AG0011,Matthew Holland-Clark,matthew.holland-clark@northgatelife.example,CA,CA-Team-Beta,Senior,2021-07-26,1.00,1,Miss Aimee Rose
+AG0012,Dr Terry Burns,dr.terry.burns@northgatelife.example,US,US-Team-Alpha,Senior,2021-07-27,1.00,1,Ann Richards-Turner
+AG0013,Adrian Baldwin,adrian.baldwin@northgatelife.example,UK,UK-Team-Gamma,Core,2023-09-11,1.00,1,Eleanor Mason
+AG0014,Miss Carolyn Patterson,miss.carolyn.patterson@northgatelife.example,CA,CA-Team-Alpha,Core,2023-12-07,1.00,1,Ann Richards-Turner
+AG0015,Marion Turner,marion.turner@northgatelife.example,AU,AU-Team-Beta,Core,2022-11-07,1.00,0,Miss Aimee Rose
+AG0016,Reece Porter,reece.porter@northgatelife.example,UK,UK-Team-Gamma,Core,2022-10-09,1.00,1,Eleanor Mason
+AG0017,Clare Evans,clare.evans@northgatelife.example,UK,UK-Team-Beta,Trainee,2021-01-25,1.00,1,Miss Aimee Rose
+AG0018,Anna Evans,anna.evans@northgatelife.example,CA,CA-Team-Alpha,Core,2019-08-14,1.00,1,Ann Richards-Turner
+AG0019,Damien Charlton,damien.charlton@northgatelife.example,CA,CA-Team-Beta,Senior,2022-12-15,1.00,1,Miss Aimee Rose
+AG0020,Tony Johnson,tony.johnson@northgatelife.example,AU,AU-Team-Alpha,Senior,2019-12-12,1.00,1,Ann Richards-Turner
+AG0021,Adam Collins,adam.collins@northgatelife.example,CA,CA-Team-Beta,Trainee,2024-05-26,1.00,1,Miss Aimee Rose
+AG0022,Dr Rosemary Hill,dr.rosemary.hill@northgatelife.example,US,US-Team-Alpha,Trainee,2020-05-14,1.00,1,Ann Richards-Turner
+AG0023,Carole Williams,carole.williams@northgatelife.example,CA,CA-Team-Beta,Core,2019-05-22,1.00,1,Miss Aimee Rose
+AG0024,Dr Glen Scott,dr.glen.scott@northgatelife.example,CA,CA-Team-Alpha,Core,2021-08-21,1.00,1,Ann Richards-Turner
+AG0025,Dean Jackson,dean.jackson@northgatelife.example,UK,UK-Team-Beta,Senior,2023-10-04,1.00,1,Miss Aimee Rose
+AG0026,Emily Thorpe-Sutton,emily.thorpe-sutton@northgatelife.example,UK,UK-Team-Alpha,Core,2019-11-23,0.60,1,Ann Richards-Turner
+AG0027,Ms Jill Atkinson,ms.jill.atkinson@northgatelife.example,AU,AU-Team-Alpha,Core,2024-10-03,1.00,1,Ann Richards-Turner
+AG0028,Miss Eleanor Owen,miss.eleanor.owen@northgatelife.example,UK,UK-Team-Beta,Senior,2017-09-13,1.00,0,Miss Aimee Rose
+AG0029,Jennifer Jordan,jennifer.jordan@northgatelife.example,UK,UK-Team-Beta,Senior,2016-03-25,1.00,1,Miss Aimee Rose
+AG0030,Owen White,owen.white@northgatelife.example,UK,UK-Team-Alpha,Core,2023-10-04,1.00,1,Ann Richards-Turner
+AG0031,Victoria Hamilton,victoria.hamilton@northgatelife.example,US,US-Team-Alpha,Core,2016-12-15,1.00,1,Ann Richards-Turner
+AG0032,Dr Alan Hudson,dr.alan.hudson@northgatelife.example,US,US-Team-Alpha,Trainee,2024-09-12,1.00,1,Ann Richards-Turner
+AG0033,Mrs Julie Barton,mrs.julie.barton@northgatelife.example,CA,CA-Team-Beta,Core,2015-11-21,1.00,1,Miss Aimee Rose
+AG0034,Dr Henry Thomas,dr.henry.thomas@northgatelife.example,UK,UK-Team-Beta,Senior,2016-12-22,1.00,0,Miss Aimee Rose
+AG0035,Dale Wilson,dale.wilson@northgatelife.example,,UK-Team-Alpha,Core,2022-06-14,0.60,1,Ann Richards-Turner
+AG0036,Christine Griffin,christine.griffin@northgatelife.example,UK,UK-Team-Beta,Trainee,2023-08-24,1.00,1,Miss Aimee Rose
+AG0037,Mr Mitchell Slater,mr.mitchell.slater@northgatelife.example,AU,AU-Team-Beta,Trainee,2015-02-27,1.00,1,Miss Aimee Rose
+AG0038,Brenda Duffy,brenda.duffy@northgatelife.example,AU,AU-Team-Alpha,Core,2024-06-09,1.00,1,Ann Richards-Turner
+AG0039,Janet Singh,janet.singh@northgatelife.example,US,US-Team-Alpha,Trainee,2023-12-31,1.00,1,Ann Richards-Turner
+AG0040,Aaron Newton,aaron.newton@northgatelife.example,UK,UK-Team-Beta,Core,2017-05-21,1.00,1,Miss Aimee Rose
+AG0041,Marian Smith-Hill,marian.smith-hill@northgatelife.example,UK,UK-Team-Beta,Core,2023-03-05,1.00,1,Miss Aimee Rose
+AG0042,Sally Jenkins-Dean,sally.jenkins-dean@northgatelife.example,UK,UK-Team-Gamma,Core,2023-02-26,1.00,1,Eleanor Mason
+AG0008,Karen Cooke-Johnson,karen.cooke-johnson@northgatelife.example,CA,UK-Team-Alpha,Core,2020-07-09,0.80,1,Miss Aimee Rose
+AG0023,Carole Williams,carole.williams@northgatelife.example,CA,CA-Team-Alpha,Senior,2019-05-22,1.00,1,Miss Aimee Rose
+AG0037,Mr Mitchell Slater,mr.mitchell.slater@northgatelife.example,AU,UK-Team-Gamma,Core,2015-02-27,1.00,1,Miss Aimee Rose

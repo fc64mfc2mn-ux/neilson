@@ -1,0 +1,9 @@
+channel_code,channel_name,channel_group,paid_flag,attribution_window_days
+PAID_SEARCH,Paid search,Paid,1,30
+PAID_SOCIAL,Paid social,Paid,1,30
+DISPLAY,Display,Paid,1,30
+AFFILIATE,Affiliate,Paid,1,30
+AGGREGATOR,Aggregator,Paid,1,1
+DIRECT_MAIL,Direct mail,Paid,1,14
+TV,TV,Paid,1,7
+ORGANIC,Organic,Organic,0,0

@@ -1,0 +1,25 @@
+campaign_id,campaign_name,channel_code,region_code,product_code,objective,start_date,end_date,landing_page_url
+CMP-1041,UK_Over50_Launch_Q2,AFFILIATE,UK,OVER50,Retargeting,2026-04-01,2026-06-30,https://northgatelife.example/uk/over50
+CMP-1042,US_TermLife_Value_Q2,ORGANIC,US,TERM_LIFE,Acquisition,2026-05-14,2026-06-30,https://northgatelife.example/us/term-life
+CMP-1043,CA_Over50_Prospecting_Q2,aggregator,CA,OVER50,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/ca/over50
+CMP-1044,CA_Over50_Brand_Q2,TV,CA,OVER50,Retargeting,2026-04-01,2026-06-30,https://northgatelife.example/ca/over50
+CMP-1045,UK_TermLife_Retarget_Q2,aggregator,UK,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/uk/term-life
+CMP-1046,UK_CI_Brand_Q2,AGGREGATOR,UK,CI,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/uk/ci
+CMP-1047,CA_TermLife_Launch_Q2,AFFILIATE,CA,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/ca/term-life
+CMP-1048,CA_TermLife_Growth_Q2,paid_search,CA,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/ca/term-life
+CMP-1049,AU_TermLife_Retarget_Q2,PAID_SEARCH,AU,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/au/term-life
+CMP-1050,AU_CI_Retarget_Q2,Aggregator,AU,CI,Retargeting,2026-04-01,2026-06-30,https://northgatelife.example/au/ci
+CMP-1051,US_Over50_Growth_Q2,TV,US,OVER50,Retargeting,2026-04-01,2026-03-22,https://northgatelife.example/us/over50
+CMP-1052,UK_CI_Retarget_Q2,PAID_SOCIAL,UK,CI,Acquisition,2026-04-01,2026-05-28,https://northgatelife.example/uk/ci
+CMP-1053,AU_Over50_Retarget_Q2,DIRECT_MAIL,AU,OVER50,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/au/over50
+CMP-1054,US_Over50_Retarget_Q2,PAID_SEARCH,US,OVER50,Acquisition,2026-04-01,2026-03-22,https://northgatelife.example/us/over50
+CMP-1055,US_CI_Prospecting_Q2,DISPLAY ,US,CI,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/us/ci
+CMP-1056,AU_Over50_Brand_Q2,DISPLAY,AU,OVER50,Acquisition,2026-04-01,2026-05-30,https://northgatelife.example/au/over50
+CMP-1057,CA_Over50_Retarget_Q2,PAID_SOCIAL,CA,OVER50,Acquisition,2026-05-07,2026-06-30,https://northgatelife.example/ca/over50
+CMP-1058,UK_TermLife_Launch_Q2,PaidSearch,UK,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/uk/term-life
+CMP-1059,UK_TermLife_Value_Q2,display,UK,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/uk/term-life
+CMP-1060,US_TermLife_Brand_Q2,PAID_SEARCH,US,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/us/term-life
+CMP-1061,AU_TermLife_Launch_Q2,DIRECT_MAIL,AU,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/au/term-life
+CMP-1062,UK_CI_Launch_Q2,SOCIAL_PAID,UK,CI,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/uk/ci
+CMP-1063,UK_TermLife_Prospecting_Q2,PaidSocial,UK,TERM_LIFE,Retargeting,2026-04-01,2026-06-30,https://northgatelife.example/uk/term-life
+CMP-1064,CA_TermLife_Retarget_Q2,Affiliate,CA,TERM_LIFE,Acquisition,2026-04-01,2026-06-30,https://northgatelife.example/ca/term-life

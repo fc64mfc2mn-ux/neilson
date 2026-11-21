@@ -1,0 +1,8 @@
+user_email,region_code,role_name
+uk.analyst@northgatelife.example,UK,Regional_Analyst
+ca.analyst@northgatelife.example,CA,Regional_Analyst
+au.analyst@northgatelife.example,AU,Regional_Analyst
+us.analyst@northgatelife.example,US,Regional_Analyst
+anz.manager@northgatelife.example,AU,Regional_Analyst
+anz.manager@northgatelife.example,US,Regional_Analyst
+marketing.analyst@northgatelife.example,ALL,Marketing_Analyst_NoPII

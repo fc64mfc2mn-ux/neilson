@@ -1,0 +1,48 @@
+# Databricks Asset Bundle stub. Structural placeholder only: it does not need
+# to deploy for this assessment. Fill in host URLs and job parameters if you
+# choose to attempt the stretch item.
+
+bundle:
+  name: northgate-funnel
+
+variables:
+  catalog:
+    description: Unity Catalog catalog name for this target
+    default: northgate_dev
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      host: https://<dev-workspace-host>.azuredatabricks.net
+      root_path: /Workspace/Users/<candidate>/northgate-funnel/dev
+    variables:
+      catalog: northgate_dev
+
+  prod:
+    mode: production
+    workspace:
+      host: https://<prod-workspace-host>.azuredatabricks.net
+      root_path: /Workspace/northgate-funnel/prod
+    variables:
+      catalog: northgate_prod
+
+resources:
+  jobs:
+    northgate_funnel_pipeline:
+      name: northgate-funnel-pipeline
+      tasks:
+        - task_key: run_pipeline
+          python_wheel_task:
+            package_name: northgate_funnel
+            entry_point: run_pipeline
+            parameters: ["--config", "config/config.yaml"]
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: Standard_DS3_v2
+            num_workers: 1
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: UTC
+        pause_status: PAUSED

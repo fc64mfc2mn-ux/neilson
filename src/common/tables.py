@@ -37,12 +37,28 @@ def table_exists(spark: SparkSession, config: dict, name: str) -> bool:
     return DeltaTable.isDeltaTable(spark, table_path(config, name))
 
 
+def _registered_location(spark: SparkSession, name: str) -> str | None:
+    if not spark.catalog.tableExists(name):
+        return None
+    location = spark.sql(f"DESCRIBE DETAIL {name}").first().location
+    return location.removeprefix("file:").rstrip("/")
+
+
 def register_table(spark: SparkSession, config: dict, name: str) -> None:
-    """(Re)point the catalog entry `<layer>.<table>` at the Delta path."""
+    """Point the catalog entry `<layer>.<table>` at this config's Delta path.
+
+    Entries are external (created with LOCATION), so dropping a stale entry
+    removes only the name, never the data it pointed at.
+    """
     layer, _ = _split(name)
-    spark.sql(f"CREATE DATABASE IF NOT EXISTS {layer}")
     location = table_path(config, name)
-    spark.sql(f"CREATE TABLE IF NOT EXISTS {name} USING DELTA LOCATION '{location}'")
+    current = _registered_location(spark, name)
+    if current == location.removeprefix("file:").rstrip("/"):
+        return
+    spark.sql(f"CREATE DATABASE IF NOT EXISTS {layer}")
+    if current is not None:
+        spark.sql(f"DROP TABLE {name}")
+    spark.sql(f"CREATE TABLE {name} USING DELTA LOCATION '{location}'")
 
 
 def append_table(

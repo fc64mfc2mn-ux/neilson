@@ -1,7 +1,8 @@
 # KPI decision log: funnel conversion rate
 
-Working notes. The final wording of `ASSUMPTIONS.md`, `KPI_DEFINITIONS.md` and the
-recommendation to both directors is written by the human.
+Status: **final** (option C, confirmed by the human). This log is the reasoning behind
+`ASSUMPTIONS.md` entry 13; the two must agree. The final wording of entry 13,
+`KPI_DEFINITIONS.md` and the recommendation to both directors is written by the human.
 
 ## What the disagreement actually is
 
@@ -40,13 +41,17 @@ change what the number means, which the BI Manager's note forbids.
 
 ## Decision (option C)
 
-- `Lead to Policy Conversion Rate`: lead grain; policies linked to a surviving lead over
-  `Leads (Deduplicated)`; anchored on lead-created date; first-touch campaign. The funnel
-  headline; shares its denominator with `Cost Per Lead (GBP)`.
-- `Connected Call to Policy Conversion Rate`: call grain; connected dispositions
-  (CONNECTED, QUOTED, APPLICATION_STARTED, SOLD); non-duplicate leads created in business
-  hours; anchored on policy-start date; last-call agent attribution.
-- A reconciliation view stepping from one number to the other one axis at a time.
+- `Lead to Policy Conversion Rate`: lead grain. Policies linked to a surviving lead, over
+  `Leads (Deduplicated)`; anchored on the lead-created date; first-touch campaign. The
+  funnel headline. It shares its denominator with `Cost Per Lead (GBP)`.
+- `Connected Call to Policy Conversion Rate`: call grain. Connected dispositions
+  (CONNECTED, QUOTED, APPLICATION_STARTED, SOLD; assumption 2); non-duplicate leads created
+  in business hours (weekdays, region's own timezone; assumption 9); anchored on the
+  policy-start date; last-call agent attribution.
+- A reconciliation view stepping from one number to the other, one axis at a time
+  (step 18).
+- Both measures exclude NTU policies (assumption 3) and policies with a NULL `lead_key`
+  (assumption 11).
 - BI Manager rules: one certified measure per KPI; both grains named and documented; the
   words "Conversion Rate" never appear on their own in a measure name.
 
@@ -56,9 +61,17 @@ Every axis is a column or relationship in the model, not baked into the pipeline
 Changing a definition means editing one DAX measure, its description, its row in
 `KPI_DEFINITIONS.md`, and the assumptions log entry. No data rebuild.
 
-## Still to settle with data
+## Inputs that affect both numbers
 
-- Whether NTU, CANCELLED and LAPSED policies count (the legacy procedure excludes NTU).
-- What 267 DECLINED-yet-INFORCE policies mean for policy counts.
-- Whether `attribution_window_days` limits which policies count for a lead (measure 10).
-- How "International" maps to regions (assumed CA, AU, US).
+Defect register references (27 defects in total; see `DEFECT_REGISTER.md` for status):
+
+| Item | Where | Status |
+| --- | --- | --- |
+| Lead dedup (numerator and denominator) | Defects 2, 3, 4 | Decided |
+| Policy duplicates, conflicting fields | Defect 19 | Decide at step 9 |
+| Policies with no lead | Defect 20; assumption 11 | Decided: NULL `lead_key`, excluded |
+| DECLINED yet INFORCE policies | Defect 22 | Finding; counted as their `policy_status` says until PolicyCore confirms |
+| NTU, CANCELLED, LAPSED | Assumption 3 | Decided: exclude NTU only; effect of also excluding CANCELLED and LAPSED reported at step 18 |
+| `attribution_window_days` | Assumption 10 | Decide at step 12 |
+| "International" = CA, AU, US | Assumption 1 | Decided |
+| Call-file timezones (business-hours flag, first call) | Defect 15; assumption 5 | Decide at step 8 |

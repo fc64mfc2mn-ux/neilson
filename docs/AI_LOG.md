@@ -78,3 +78,18 @@ mismatch against `dim_agent.csv` before writing it (lines 44 and 46). Entry 10 n
 is settled at step 12. Entry 11 now uses a NULL `lead_key` rather than an `UNKNOWN` lead.
 Entry 13 (the KPI conflict) was drafted from KPI_DECISION_LOG.md, marked for Jason to
 rewrite. Defect 27 was added to DEFECT_REGISTER.md.
+
+### 2026-11-21  Step 2: finish (defect status, KPI decision log)
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt: add a Status column to DEFECT_REGISTER.md (Decided / Decide at step N with the
+measurement / Finding), do not invent decisions that need evidence, and finalise
+KPI_DECISION_LOG.md to match ASSUMPTIONS.md entry 13 and the 27 defects.
+What it produced: a status for all 27 defects. Defects whose handling was "X or Y"
+(7, 10, 17, 18, 19) were split into a decided part and a "decide at step N" part, each
+naming the measurement. The KPI log is marked final; its decision section cross-references
+assumptions 2, 3, 9 and 11; "Still to settle" became a table of inputs and their status.
+What was wrong or changed, and how I caught it: the review found defect 9's handling says
+"log assumption" but no ASSUMPTIONS.md entry exists yet. Recorded in its status rather than
+invented. Defect 22 is left as their recorded `policy_status` says until PolicyCore
+confirms; that default is flagged for the human.
+Kept by hand (not delegated): final wording of entry 13 and the directors' recommendation.

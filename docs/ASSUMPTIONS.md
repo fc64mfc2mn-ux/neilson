@@ -30,11 +30,18 @@ confirm or overturn. The query and the result will be recorded against the entry
    *Evidence needed:* the disagreement rate after normalisation. *Reverse:* switch the
    `channel_key` source in the gold facts.
 
-5. **Call-file timezones (pending evidence).** *Ambiguity:* neither file states its
-   timezone, and AU calls read as UTC give implausible first-call latency. *Options:*
-   UTC; the region's local zone from `ref_region`, DST-aware; a fixed offset. *Choice:*
-   per file, whichever hypothesis gives plausible first-call latency. *Reason:* evidence,
-   not assumption. *Reverse:* change the per-file timezone in config and rerun.
+5. Call-file timezones (evidence recorded; AU unresolved).
+   Ambiguity: neither call file states its timezone.
+   Options: treat as UTC; convert from the region's local zone (DST-aware); fixed offset.
+   Choice: UK, CA and US call timestamps are treated as UTC. Median first-call gap after
+   lead creation is 22 min (UK), 44 min (CA) and 40 min (US) as UTC, but about 280 min for
+   CA and US if read as local time. AU is unexplained: 18.5 h as UTC, 8.4 h as Sydney local
+   time, against about 22 min expected. AU timestamps are kept as UTC, flagged in the data
+   quality output, and not corrected.
+   Reason: only the UK, CA and US hypotheses are supported by the data. A Sydney conversion
+   would look fixed but leaves an 8 h error.
+   Reverse: change the per-region timezone in config and rerun. Next test: check whether AU
+   lead timestamps are the shifted side.
 
 6. **Minor-unit spend (pending evidence).** *Ambiguity:* some GBP and AUD spend rows sit
    far above their campaign's median, consistent with pence or cents. *Options:* keep;
@@ -105,3 +112,11 @@ confirm or overturn. The query and the result will be recorded against the entry
     *Choice:* add `pyyaml==6.0.2`, pinned, used only by `src/common/config.py`. *Reason:*
     the brief names `config/config.yaml`; a hand-written parser would be fragile.
     *Reverse:* remove the pin and load a JSON config instead.
+
+15. **Bronze reruns.** *Ambiguity:* bronze must be append-only, but a second run of the one
+    command must not double every row. *Options:* drop and reload each run; append
+    blindly; append only changed files. *Choice:* each landing is a batch with one
+    `_ingest_ts`; its content fingerprint goes in `bronze.ingest_log`. An unchanged file
+    appends nothing, a changed file appends a new batch, and silver reads the latest
+    batch per file. *Reason:* keeps bronze append-only and auditable, and makes reruns
+    idempotent. *Reverse:* delete the file's `bronze.ingest_log` rows to force a reload.

@@ -132,3 +132,36 @@ Human decisions on the step 3 check, and what followed:
    fast on a placeholder salt. README "How to run" says so.
 Check after the changes: ruff clean; pytest 17 passed, 6 skipped. First run generated
 `config/secrets.json` (-rw-------, gitignored) and exited 0. A second run reused the file.
+
+### 2026-11-21  Way of working change, then step 4: bronze
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): priorities in order (correct data, tests at every stage, fresh-clone run,
+real history, Power BI, stretch); test first; read the earlier Databricks attempt at
+`neilson 2/neilson` as read-only reference without copying; build stage by stage from
+step 4, stopping after each.
+What it produced:
+- CLAUDE.md (commit 1deab17): priority order, test-first rule, the reference repo's
+  traps, and the expected counts. Built on the human's own uncommitted draft. One line
+  in that draft ("SCD2 and both bridges are already done") described the reference
+  repo, not this one, so it was corrected.
+- Step 4: `src/common/tables.py` (path-based Delta under `lakehouse/<layer>/<table>`,
+  re-registered by name each session, because Spark's default catalog is in-memory) and
+  `src/bronze/ingest.py`. Differs from the reference: the reference dropped each bronze
+  table on every run (not append-only). Here a content fingerprint per file goes in
+  `bronze.ingest_log`; unchanged files append nothing (ASSUMPTIONS entry 15).
+- `tests/test_bronze_ingest.py`, written before the code and confirmed failing first:
+  10 tests (row-hash determinism and separator safety, raw strings kept, nested JSON
+  as text, rerun/changed-file batches, the two call files in one table, all 12 tables
+  against MANIFEST rows and columns, exact table names, a second full run appends 0).
+Check: bronze counts equal MANIFEST (leads 48,000 with 47,997 distinct ids; calls
+41,000 + 23,000; policies 5,200; spend 2,224). A second pipeline run appended 0 rows.
+ruff clean.
+What was wrong or changed, and how I caught it:
+- My `latest_batch` first put a window function inside `where`. Spark rejects that.
+  Caught by the failing test; fixed by computing the window as a column first.
+- My JSON test expected `{"a":2}`, but `primitivesAsString` gives `{"a":"2"}`. The test
+  was wrong: bronze should keep text. The expectation was corrected and commented.
+- ruff N812 flags `functions as F`; it is ignored in pyproject.toml as the standard
+  PySpark alias.
+Open: the bronze tests take about 3 minutes (many small Delta writes). Acceptable for
+now; revisit if CI time matters.

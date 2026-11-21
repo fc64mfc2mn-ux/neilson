@@ -53,9 +53,7 @@ def load_config(config_path: str) -> dict:
 
     environment = config.get("environment")
     if environment not in VALID_ENVIRONMENTS:
-        raise ConfigError(
-            f"environment must be one of {VALID_ENVIRONMENTS}, got {environment!r}."
-        )
+        raise ConfigError(f"environment must be one of {VALID_ENVIRONMENTS}, got {environment!r}.")
 
     sources = config.get("sources")
     if not isinstance(sources, dict) or not sources:
@@ -76,9 +74,7 @@ def resolve_source_path(config: dict, source_name: str) -> str:
     """Return the local or Azure path for a source, per `environment`."""
     sources = config.get("sources", {})
     if source_name not in sources:
-        raise ConfigError(
-            f"Unknown source {source_name!r}. Known sources: {sorted(sources)}."
-        )
+        raise ConfigError(f"Unknown source {source_name!r}. Known sources: {sorted(sources)}.")
     return sources[source_name][PATH_KEY_BY_ENVIRONMENT[config["environment"]]]
 
 

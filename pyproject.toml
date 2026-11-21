@@ -14,6 +14,8 @@ src = ["src", "tests"]
 # B    bugbear (common bug patterns), SIM  simplification,
 # C4   comprehension cleanups, N  naming conventions.
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "N"]
+# `from pyspark.sql import functions as F` is the standard PySpark alias.
+ignore = ["N812"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]

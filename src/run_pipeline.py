@@ -63,9 +63,7 @@ def check_local_sources(config: dict) -> list[str]:
     if config["environment"] != "local":
         return []
     return [
-        name
-        for name in config["sources"]
-        if not Path(resolve_source_path(config, name)).is_file()
+        name for name in config["sources"] if not Path(resolve_source_path(config, name)).is_file()
     ]
 
 
@@ -88,9 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         log.error("Source files not found: %s", missing)
         return 1
-    log.info(
-        "Environment=%s, %d sources configured", config["environment"], len(config["sources"])
-    )
+    log.info("Environment=%s, %d sources configured", config["environment"], len(config["sources"]))
 
     config["run_id"] = run_id
     spark = get_spark(warehouse_dir=resolve_lakehouse_root(config))

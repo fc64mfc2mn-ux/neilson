@@ -54,3 +54,27 @@ starter `spark_session.py` sets no timezone (it shows as None, so the JVM local 
 used). I caught it in the test output, dropped the assertion and noted the gap. Setting UTC
 is part of step 3.
 Kept by hand (not delegated): approving the Java 17 install and choosing the JAVA_HOME path.
+
+### 2026-11-21  Step 2: draft docs/ASSUMPTIONS.md
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim): "Do step 2 of docs/PLAN.md. Draft docs/ASSUMPTIONS.md from the 12
+assumptions in PLAN.md, one numbered entry each, in this format: the ambiguity, options
+considered, choice made, reason, how to reverse it. Mark entries that depend on a data check
+(timezones, minor-unit spend, channel source of truth, attribution window) as "pending
+evidence". Do not write the KPI recommendation to the directors yet. Show me the draft
+before committing."
+What it produced: a 12-entry draft built from PLAN.md, DEFECT_REGISTER.md,
+KPI_DECISION_LOG.md, ref_region, ref_channel, the Ops brief (overnight and weekend wording)
+and the legacy procedure (`PolicyStatus <> 'NTU'`). Entries 4, 5, 6 and 10 are marked
+pending evidence. Counts from the pandas pass were left out, because CLAUDE.md rule 8 needs
+each number to come from a query kept in the repo.
+What was wrong or changed, and how I caught it: the draft is about 660 words, over the
+brief's 300 to 500 word target. Flagged for trimming. Entry 8 (SCD2 proxy) is a proposal
+for the human to confirm.
+Kept by hand (not delegated): final wording of ASSUMPTIONS.md (per KPI_DECISION_LOG.md).
+Revision (human review of the draft): entry 8 now uses Q1 and Q2 validity windows, and
+quarantines the UK team values on the later AG0008 and AG0037 rows. The AI checked that
+mismatch against `dim_agent.csv` before writing it (lines 44 and 46). Entry 10 now says it
+is settled at step 12. Entry 11 now uses a NULL `lead_key` rather than an `UNKNOWN` lead.
+Entry 13 (the KPI conflict) was drafted from KPI_DECISION_LOG.md, marked for Jason to
+rewrite. Defect 27 was added to DEFECT_REGISTER.md.

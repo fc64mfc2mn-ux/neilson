@@ -2,4 +2,99 @@
 
 ## Assumptions
 
-<!-- fill in: numbered list. Each entry: the ambiguity, options considered, choice made, reason, how to reverse it. -->
+Entries marked **pending evidence** have a working choice that a pipeline measurement will
+confirm or overturn. The query and the result will be recorded against the entry.
+
+1. **Region groupings.** *Ambiguity:* the director titles say "UK and Ireland" and
+   "International"; `ref_region` holds only UK, CA, AU and US. *Options:* map by title;
+   report Ireland as missing. *Choice:* UK and Ireland = UK; International = CA, AU, US.
+   *Reason:* these are the only regions in the data. *Reverse:* edit the region-group
+   column in `gold.dim_region`.
+
+2. **Connected calls.** *Ambiguity:* which dispositions mean a conversation. *Options:*
+   CONNECTED only; CONNECTED plus later stages. *Choice:* CONNECTED, QUOTED,
+   APPLICATION_STARTED, SOLD. *Reason:* matches the brief's `Contact Rate`; a quote or
+   sale implies contact. *Reverse:* change the disposition list behind the connected flag
+   in silver calls.
+
+3. **Policy status.** *Ambiguity:* which policies count as converted. *Options:* all;
+   exclude NTU; also exclude CANCELLED and LAPSED. *Choice:* exclude NTU only. *Reason:*
+   the legacy procedure excludes NTU, and a cancelled policy was still sold. The stricter
+   rule's effect will be measured and reported. *Reverse:* change the status filter in the
+   policy measures.
+
+4. **Channel source of truth (pending evidence).** *Ambiguity:* lead channel and campaign
+   channel disagree on a share of leads. *Options:* lead channel; campaign channel.
+   *Choice:* campaign channel, after normalising labels to `ref_channel`. *Reason:* spend
+   is recorded by campaign, so CPL's numerator and denominator share one channel.
+   *Evidence needed:* the disagreement rate after normalisation. *Reverse:* switch the
+   `channel_key` source in the gold facts.
+
+5. **Call-file timezones (pending evidence).** *Ambiguity:* neither file states its
+   timezone, and AU calls read as UTC give implausible first-call latency. *Options:*
+   UTC; the region's local zone from `ref_region`, DST-aware; a fixed offset. *Choice:*
+   per file, whichever hypothesis gives plausible first-call latency. *Reason:* evidence,
+   not assumption. *Reverse:* change the per-file timezone in config and rerun.
+
+6. **Minor-unit spend (pending evidence).** *Ambiguity:* some GBP and AUD spend rows sit
+   far above their campaign's median, consistent with pence or cents. *Options:* keep;
+   divide by 100; quarantine. *Choice:* divide by 100 where the ratio to the median
+   clearly fits that rule; quarantine the ambiguous rows. *Reason:* left as they are,
+   they distort CPL badly. *Evidence needed:* the ratio distribution, to set the
+   threshold. *Reverse:* change or disable the rule; every affected row is logged in
+   `silver.dq_exception`.
+
+7. **Missing CAD rate for June.** *Options:* carry May forward; average the months;
+   quarantine. *Choice:* quarantine CAD June spend at error severity, so the DQ gate
+   fails. *Reason:* carrying May forward would invent a Treasury rate, and the brief
+   forbids silent nulls. *Reverse:* load the rate once Treasury supplies it, then rerun.
+
+8. **SCD2 effective dates.** *Ambiguity:* some agents appear twice with a different team
+   or seniority and no dates. *Options:* use the first-seen load date; use file row
+   order; keep current state only. *Choice:* an approximation. The earlier file row is
+   valid from 2026-01-01 to 2026-03-31; the later row is current from 2026-04-01, the
+   start of the reporting period. The later rows for AG0008 (CA) and AG0037 (AU) name UK
+   teams, which do not match their region. Those team values are quarantined and the
+   earlier team is kept (defect 27). *Reason:* the source has no dates, so the proxy is
+   stated rather than hidden. *Reverse:* replace the dates with HR effective dates.
+
+9. **Business hours.** *Ambiguity:* Ops excludes leads "outside regional business
+   hours" without defining weekends or holidays. *Options:* `ref_region` hours every day;
+   weekdays only; weekdays minus holidays. *Choice:* Monday to Friday, start inclusive
+   and end exclusive, in the region's own timezone. No holiday calendar. *Reason:* the Ops
+   note names overnight and weekend; the pack has no holiday data. *Reverse:* change the
+   flag logic or add a holiday table.
+
+10. **Attribution window (pending evidence).** *Ambiguity:* `ref_channel` gives
+    `attribution_window_days` (0 to 30) but nothing says whether it limits which policies
+    count. *Options:* ignore it; count only policies within the window. *Choice:* none
+    yet; settled at step 12, when the funnel fact is built. *Evidence needed:* how many
+    linked policies fall outside it. *Reverse:* one filter in the lead-attributed policy
+    measures.
+
+11. **Policies with no lead.** *Options:* drop; keep against an `UNKNOWN` lead; keep with
+    a NULL key. *Choice:* keep them in `gold.fact_policy` with a NULL `lead_key`, and
+    exclude them from lead-attributed measures. Power BI shows them as blank. *Reason:*
+    they are real sales but cannot be attributed. `gold.dim_lead` is one row per
+    deduplicated lead, so an `UNKNOWN` member would add a lead that does not exist.
+    *Reverse:* a measure filter.
+
+12. **Fiscal quarter.** *Ambiguity:* the pack gives no fiscal calendar. *Choice:*
+    calendar quarters, so the reporting period is Q2 2026. *Reverse:* add fiscal columns
+    to `gold.dim_date`.
+
+13. **Funnel conversion rate (DRAFT, to be rewritten by Jason).** *Ambiguity:* the two
+    directors define conversion on four axes. Only the denominator truly collides:
+    Marketing uses all leads (lead grain), Ops uses connected calls (call grain).
+    Population, attribution and period are different scopes or date roles, not
+    conflicts. *Options:* A, Marketing's definition for all; B, Ops's for all; C, two
+    certified, explicitly named measures plus a reconciliation; D, one measure with a
+    definition slicer. *Choice:* C. `Lead to Policy Conversion Rate` (lead grain,
+    lead-created date, first-touch campaign) and `Connected Call to Policy Conversion
+    Rate` (call grain, business-hours leads, policy-start date, last-call agent). A
+    reconciliation view steps between the two one axis at a time. No measure is called
+    plain "Conversion Rate". *Reason:* forcing either grain on the other changes what the
+    number means. A and B override one director, and D puts two answers behind one name.
+    The BI Manager's note allows named variants. *Reverse:* every axis is a model column
+    or relationship, so a change is one DAX measure, its description and its
+    `KPI_DEFINITIONS.md` row. No data rebuild.

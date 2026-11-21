@@ -31,6 +31,7 @@ the pipeline. Each defect maps to a DQ check, an assumption, or a finding.
 | 24 | Lead channel vs campaign channel | About 19% disagree before label cleanup (8,970 raw) | Re-measure after normalising; pick one source of truth |
 | 25 | Consent integrity | 2,900 leads have events; 299 end WITHDRAWN yet 284 still show `consent_marketing = Y` | Governance finding; `consent_current` is the source of truth |
 | 26 | Calls after a DO_NOT_CALL disposition | 4,461 UK and AU calls on 2,897 leads | Candidate headline finding |
+| 27 | Agent team does not match region | The later roster rows for AG0008 (CA, `UK-Team-Alpha`) and AG0037 (AU, `UK-Team-Gamma`) name UK teams | Quarantine those team values in `silver.dq_exception`; keep the earlier team (assumption 8) |
 
 ## Read-across
 

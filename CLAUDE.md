@@ -8,6 +8,34 @@ truth. Then read `docs/PLAN.md`, `docs/DEFECT_REGISTER.md` and
 
 Deadline: Thursday 26 November 2026. Target submission: Wednesday 25 November evening.
 
+## Priority order
+
+When time is short, work top-down. Never steal time from a higher rung to
+polish a lower one.
+
+1. **Correct data.** Every table reconciles to the defect register; every
+   rejected row is in `silver.dq_exception` with check name, severity, key.
+   No silent fixes, no silent drops.
+2. **Tests and reproducible numbers.** The six named tests pass in CI. Every
+   number quoted in a document traces to a query in `src/sql/findings_*.sql`
+   or a test. If a finding can't be re-run, it isn't a finding.
+3. **Executable handover.** A fresh clone on the local stack runs
+   `python -m src.run_pipeline --config config/config.yaml` end to end, and a
+   second run is idempotent (no doubled rows). The reviewer runs this exact
+   command on a Mac — the Databricks validation is evidence, not a substitute.
+4. **Real committed history.** Commit after every green check. Never end a
+   session with finished work uncommitted. Small commits, each saying what
+   changed and why; at least 12 in total; never squash or amend published
+   commits.
+5. **Power BI core.** `.pbix` star schema with measures 1, 2, 3, 5, 7, 9, the
+   marked date table, and the four-visual page; DAX mirrored in
+   `powerbi/measures.dax`. This is core scope, not stretch — build it as soon
+   as rungs 1 to 4 hold.
+6. **Stretch** — only after 1 to 5: legacy port with parity test, UC grants and
+   Asset Bundle stub, performance artefact, extra measures, remaining roles.
+   SCD2 and both bridges are core work in steps 10 and 12; they aren't stretch, and
+   they aren't done in this repo yet.
+
 ## Hard rules
 
 1. **Never edit anything under `data/`.** It is read-only and the reviewer rechecks its
@@ -32,6 +60,12 @@ Deadline: Thursday 26 November 2026. Target submission: Wednesday 25 November ev
    `check_name`, `source_table`, `key_value`, `severity`, `detected_at_utc`.
 8. **Every number quoted in a document must come from a query kept in the repo**
    (put them in `src/sql/findings_*.sql` or a test), so findings are reproducible.
+9. **Every stage ships with its tests, and reconciliation checks run at every stage.**
+10. **Test first.** For each stage, write the tests before the code: small fixture
+    DataFrames for the logic, plus a reconciliation check (rows in = rows out + rows in
+    `silver.dq_exception`). When something breaks, write the failing test first, then
+    fix it.
+11. **The skip-if-not-implemented behaviour in the runner is removed by step 12.**
 
 ## Commands
 
@@ -41,9 +75,9 @@ pip install -r requirements.txt
 java -version                      # must be 17
 # On this Mac, activating the venv sets JAVA_HOME to the Homebrew openjdk@17 path.
 # Java 17 must be active before running Spark. System default is Java 21.
-cp config/config.example.yaml config/config.yaml
-cp config/secrets.example.json config/secrets.json   # then set a local salt
 python -m src.run_pipeline --config config/config.yaml
+# config/config.yaml is committed (local paths only). config/secrets.json is gitignored
+# and generated with a random salt on the first run. Never commit it.
 ruff check .
 pytest
 ```
@@ -64,6 +98,32 @@ pytest
 - **Starter config bug:** `calls_ca_us` is declared `sep: ";"` but the file is
   comma-delimited. Fix it and record it as a finding.
 
+## Reference implementation (read-only)
+
+An earlier attempt built the full pipeline in Databricks at
+`/Users/jason/neilson/neilson 2/neilson`. It is reference only: never edit it, and don't
+copy files wholesale. Read it, then write a cleaner version here, stage by stage, in the
+order of `docs/PLAN.md` steps 4 onward. Known traps in it (each needs a test here):
+
+- **AU call timezone.** UK, CA and US call timestamps behave as UTC (median first-call
+  gap 22 to 44 minutes). AU is not explained by "Sydney local" (still about 8 hours off).
+  Don't hard-code a Sydney conversion: keep AU as is, in UTC, flag the residual offset in
+  `silver.dq_exception` and `ASSUMPTIONS.md`, and test the observed gap.
+- **The funnel's grain.** `bridge_lead_call` is not the funnel. `fact_lead_funnel` has one
+  row per surviving lead (47,201 expected), and a test asserts it.
+- **DQ gate.** No zero threshold: about 675 error rows are expected. Gate on the expected
+  count per defect, held in config, and fail only on a breach beyond it. Test a seeded
+  breach (fails) and clean data (passes).
+- **Spend reconciliation.** 2,224 -> 2,001 rows: only 40 exact duplicates and 4 missing FX
+  explain part of it. Account for every row, with a reconciliation test.
+- **Minor-unit spend.** Record the evidence and the threshold in `ASSUMPTIONS.md`.
+
+## Expected counts (independently verified)
+
+Leads 47,997 distinct ids -> 47,201 surviving (3 PK conflicts, 758 duplicates, 35
+unidentifiable). Calls 64,000 -> 62,830 (540 + 250 + 380 removed). Policies 5,200 ->
+5,172. Any difference is explained, never forced to match.
+
 ## Git conventions
 
 - Small commits, each with a message saying what changed and why. Aim for at least 12.
@@ -80,7 +140,8 @@ governance risks.
 
 ## Working style
 
-- Do one plan step at a time. State the check, run it, show the result, then commit.
+- Do one plan step at a time: tests first, implement, run, compare counts to the expected
+  figures, commit that slice alone, then stop and report. Wait for "go".
 - Ask before deviating from the brief or the decisions above.
 - Prefer small, tested functions. Tests use the `spark` fixture in `tests/conftest.py`.
 - Keep documents within the brief's word targets and required sections.
@@ -90,4 +151,5 @@ governance risks.
 
 ## Where things stand
 
-Step 1 done (scaffold, hashes, venv, Java 17, Delta fixture). Next: step 2 of `docs/PLAN.md` (decision log).
+Steps 1 to 3 done (scaffold; assumptions and defect status; config, UTC session, runner).
+Next: step 4 of `docs/PLAN.md` (bronze).

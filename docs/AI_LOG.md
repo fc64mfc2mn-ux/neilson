@@ -93,3 +93,42 @@ What was wrong or changed, and how I caught it: the review found defect 9's hand
 invented. Defect 22 is left as their recorded `policy_status` says until PolicyCore
 confirms; that default is flagged for the human.
 Kept by hand (not delegated): final wording of entry 13 and the directors' recommendation.
+
+### 2026-11-21  Step 3: config, runner, logging, UTC session
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim): "Do step 3 of docs/PLAN.md. Fix the calls_ca_us delimiter in
+config/config.example.yaml (comma, not semicolon). Finish src/common/config.py,
+spark_session.py (set the session timezone to UTC), logging_setup.py and
+src/run_pipeline.py. The one command must run end to end with empty stages. Write a small
+test for load_config and resolve_source_path using the spark fixture only where needed.
+Show me the check result before committing. Log the task in docs/AI_LOG.md."
+What it produced:
+- `config.example.yaml`: `calls_ca_us` `sep: ","` (defect 1).
+- `config.py`: `load_config` (validates environment and the keys each source needs),
+  `resolve_source_path`, `resolve_lakehouse_root`, `load_secrets`. `load_secrets` refuses
+  the example file and a placeholder salt.
+- `spark_session.py`: `spark.sql.session.timeZone = UTC`.
+- `logging_setup.py`: one `northgate` logger; UTC timestamps; `run_id` on every record.
+- `run_pipeline.py`: parses `--config`, checks that every local source file exists, starts
+  Spark, then runs bronze, silver and the three gold stages in order. A stage that raises
+  NotImplementedError is logged as skipped; any other error exits 1.
+- `tests/test_config.py`: 12 tests. Only the UTC test uses the `spark` fixture.
+Check: `ruff check .` clean; `pytest` 12 passed, 6 skipped (stubs); the one command exits 0
+with all 5 stages skipped and the session timezone logged as UTC; a missing config exits 1.
+What was wrong or changed, and how I caught it: PyYAML was not in requirements.txt and not
+installed, so the YAML config could not be parsed. Found by trying the import before
+writing `load_config`. Added `pyyaml==6.0.2` and flagged it for approval. Also, the first
+check script read the exit code from `PIPESTATUS`, which zsh does not set, so the exit code
+printed blank. Re-ran with a plain `$?`.
+Kept by hand (not delegated): approving the new dependency.
+Human decisions on the step 3 check, and what followed:
+1. PyYAML approved. Logged as ASSUMPTIONS.md entry 14.
+2. `config/config.yaml` is committed: local `data/` paths only, no `abfss://` or other cloud
+   paths (cloud paths go in a separate `config/config.databricks.yaml` if needed).
+   `load_config` was changed to require only the active environment's path. A test checks
+   that config.yaml and config.example.yaml agree on paths, formats and options.
+3. Salt: if `secrets.json` is missing, the runner generates a random 32-byte hex salt into
+   it (mode 0600, exclusive create, never overwrites). It then loads the secrets to fail
+   fast on a placeholder salt. README "How to run" says so.
+Check after the changes: ruff clean; pytest 17 passed, 6 skipped. First run generated
+`config/secrets.json` (-rw-------, gitignored) and exited 0. A second run reused the file.

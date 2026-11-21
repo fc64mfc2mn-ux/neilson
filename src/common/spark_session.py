@@ -33,6 +33,8 @@ def get_spark(app_name: str = "northgate-funnel", warehouse_dir: str = "lakehous
             "org.apache.spark.sql.delta.catalog.DeltaCatalog",
         )
         .config("spark.sql.warehouse.dir", warehouse_dir)
+        # All timestamps are stored and compared in UTC, whatever the machine's zone.
+        .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.shuffle.partitions", "4")
         .config("spark.ui.showConsoleProgress", "false")
     )

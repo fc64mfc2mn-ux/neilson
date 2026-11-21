@@ -54,7 +54,7 @@ sources:
     format: csv
     options:
       header: true
-      sep: ";"
+      sep: ","  # starter config said ";" but the file is comma-delimited (defect 1)
 
   dim_agent:
     local_path: data/contact_centre/dim_agent.csv

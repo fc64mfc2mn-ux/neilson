@@ -98,3 +98,10 @@ confirm or overturn. The query and the result will be recorded against the entry
     The BI Manager's note allows named variants. *Reverse:* every axis is a model column
     or relationship, so a change is one DAX measure, its description and its
     `KPI_DEFINITIONS.md` row. No data rebuild.
+
+14. **Dependency addition: PyYAML.** *Ambiguity:* the stack is fixed, but the brief requires
+    a YAML config, and neither the starter `requirements.txt` nor PySpark includes a YAML
+    parser. *Options:* add a parser; write one by hand; switch the config to JSON.
+    *Choice:* add `pyyaml==6.0.2`, pinned, used only by `src/common/config.py`. *Reason:*
+    the brief names `config/config.yaml`; a hand-written parser would be fragile.
+    *Reverse:* remove the pin and load a JSON config instead.

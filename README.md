@@ -33,7 +33,19 @@
 
 ## How to run, one command
 
-<!-- The single command that runs the whole pipeline end to end. -->
+From the repo root, with the venv active:
+
+```bash
+python -m src.run_pipeline --config config/config.yaml
+```
+
+No other setup is needed. `config/config.yaml` is committed and holds only local `data/`
+paths. On the first run the pipeline creates `config/secrets.json` (gitignored, owner-only
+permissions) with a random PII hash salt, and reuses it afterwards. Deleting that file
+changes the salt, and with it every hashed key in gold.
+
+Today the runner checks the config, the input files and the salt, starts a UTC Spark
+session, and then skips the bronze, silver and gold stages, which are not built yet.
 
 ## Input data
 

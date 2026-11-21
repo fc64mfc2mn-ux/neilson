@@ -1,0 +1,86 @@
+# Committed run config for the local pipeline:
+#   python -m src.run_pipeline --config config/config.yaml
+# Local paths only, no secrets. Cloud paths belong in a separate config file
+# (for example config/config.databricks.yaml), not here.
+
+environment: local
+
+# Gitignored. Created with a random PII hash salt on first run if missing.
+secrets_file: config/secrets.json
+
+sources:
+  dim_campaign:
+    local_path: data/marketing/dim_campaign.csv
+    format: csv
+    options:
+      header: true
+
+  marketing_spend_daily:
+    local_path: data/marketing/marketing_spend_daily.csv
+    format: csv
+    options:
+      header: true
+
+  leads:
+    local_path: data/marketing/leads.csv
+    format: csv
+    options:
+      header: true
+
+  consent_events:
+    local_path: data/marketing/consent_events.json
+    format: json
+    options:
+      multiLine: true
+
+  calls_uk_au:
+    local_path: data/contact_centre/calls_uk_au.csv
+    format: csv
+    options:
+      header: true
+
+  calls_ca_us:
+    local_path: data/contact_centre/calls_ca_us.csv
+    format: csv
+    options:
+      header: true
+      sep: ","  # starter config said ";" but the file is comma-delimited (defect 1)
+
+  dim_agent:
+    local_path: data/contact_centre/dim_agent.csv
+    format: csv
+    options:
+      header: true
+
+  policies:
+    local_path: data/finance/policies.csv
+    format: csv
+    options:
+      header: true
+
+  fx_rates_monthly:
+    local_path: data/finance/fx_rates_monthly.csv
+    format: csv
+    options:
+      header: true
+
+  ref_channel:
+    local_path: data/reference/ref_channel.csv
+    format: csv
+    options:
+      header: true
+
+  ref_region:
+    local_path: data/reference/ref_region.csv
+    format: csv
+    options:
+      header: true
+
+  sec_user_region:
+    local_path: data/reference/sec_user_region.csv
+    format: csv
+    options:
+      header: true
+
+lakehouse:
+  local_root: lakehouse

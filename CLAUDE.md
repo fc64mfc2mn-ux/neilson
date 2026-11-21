@@ -39,6 +39,8 @@ Deadline: Thursday 26 November 2026. Target submission: Wednesday 25 November ev
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 java -version                      # must be 17
+# On this Mac, activating the venv sets JAVA_HOME to the Homebrew openjdk@17 path.
+# Java 17 must be active before running Spark. System default is Java 21.
 cp config/config.example.yaml config/config.yaml
 cp config/secrets.example.json config/secrets.json   # then set a local salt
 python -m src.run_pipeline --config config/config.yaml
@@ -88,4 +90,4 @@ governance risks.
 
 ## Where things stand
 
-Repo scaffold and input data are committed. Next: step 1 of `docs/PLAN.md`.
+Step 1 done (scaffold, hashes, venv, Java 17, Delta fixture). Next: step 2 of `docs/PLAN.md` (decision log).

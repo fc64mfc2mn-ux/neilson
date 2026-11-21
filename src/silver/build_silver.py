@@ -13,6 +13,11 @@ from __future__ import annotations
 
 from pyspark.sql import SparkSession
 
+from src.common.dq import StageResult, ensure_dq_table
+from src.silver.reference import build_reference
 
-def build_silver(spark: SparkSession, config: dict) -> None:
-    raise NotImplementedError
+
+def build_silver(spark: SparkSession, config: dict) -> list[StageResult]:
+    """Build silver in dependency order. Later plan steps add leads, calls and so on."""
+    ensure_dq_table(spark, config)
+    return build_reference(spark, config)

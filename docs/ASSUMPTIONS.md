@@ -23,12 +23,11 @@ confirm or overturn. The query and the result will be recorded against the entry
    rule's effect will be measured and reported. *Reverse:* change the status filter in the
    policy measures.
 
-4. **Channel source of truth (pending evidence).** *Ambiguity:* lead channel and campaign
-   channel disagree on a share of leads. *Options:* lead channel; campaign channel.
-   *Choice:* campaign channel, after normalising labels to `ref_channel`. *Reason:* spend
-   is recorded by campaign, so CPL's numerator and denominator share one channel.
-   *Evidence needed:* the disagreement rate after normalisation. *Reverse:* switch the
-   `channel_key` source in the gold facts.
+4. **Channel source of truth.** *Ambiguity:* lead and campaign channel can disagree.
+   *Options:* lead channel; campaign channel. *Choice:* campaign channel, after
+   normalising labels to `ref_channel`. *Reason:* spend is recorded by campaign; after
+   normalisation only 600 of 47,687 leads disagree, scattered across all channel pairs
+   (`findings_reference.sql`). *Reverse:* switch the `channel_key` source in gold.
 
 5. Call-file timezones (evidence recorded; AU unresolved).
    Ambiguity: neither call file states its timezone.
@@ -120,3 +119,8 @@ confirm or overturn. The query and the result will be recorded against the entry
     appends nothing, a changed file appends a new batch, and silver reads the latest
     batch per file. *Reason:* keeps bronze append-only and auditable, and makes reruns
     idempotent. *Reverse:* delete the file's `bronze.ingest_log` rows to force a reload.
+
+16. **Agents with no region.** *Ambiguity:* AG0007 and AG0035 have no roster region.
+    *Options:* leave `UNKNOWN`; use the team prefix. *Choice:* team prefix (UK). *Reason:*
+    both take calls only in the UK, and the prefix matches the region on 41 of 43 rows
+    (`findings_reference.sql`). *Reverse:* drop the fallback in `conform_agents`.

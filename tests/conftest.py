@@ -10,6 +10,8 @@ from __future__ import annotations
 import shutil
 import tempfile
 from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 from pyspark.sql import SparkSession
@@ -31,3 +33,42 @@ def spark() -> Iterator[SparkSession]:
     finally:
         session.stop()
         shutil.rmtree(warehouse_dir, ignore_errors=True)
+
+
+# --------------------------------------------------------------------------- real data
+# Full-data fixtures are built once per test session and shared by every test
+# file. Tests that use them are marked `slow` (deselect with `-m "not slow"`).
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+@dataclass(frozen=True)
+class BronzeRun:
+    config: dict
+    first: list
+    second: list
+
+
+def real_data_config(lakehouse_root: Path, run_id: str) -> dict:
+    """The committed run config, pointed at a temp lakehouse, absolute source paths."""
+    from src.common.config import load_config
+
+    config = load_config(str(REPO_ROOT / "config" / "config.yaml"))
+    config["lakehouse"] = {"local_root": str(lakehouse_root)}
+    config["run_id"] = run_id
+    config["sources"] = {
+        name: {**src, "local_path": str(REPO_ROOT / src["local_path"])}
+        for name, src in config["sources"].items()
+    }
+    return config
+
+
+@pytest.fixture(scope="session")
+def real_bronze(spark, tmp_path_factory) -> BronzeRun:
+    """All 12 real files landed in bronze, then ingested a second time (idempotency)."""
+    from src.bronze.ingest import ingest_all
+
+    config = real_data_config(tmp_path_factory.mktemp("real") / "lakehouse", "test-real")
+    first = ingest_all(spark, config)
+    second = ingest_all(spark, config)
+    return BronzeRun(config, first, second)

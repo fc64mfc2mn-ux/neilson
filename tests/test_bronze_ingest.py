@@ -12,12 +12,10 @@ from pyspark.sql.types import StringType
 from src.bronze.ingest import (
     BRONZE_TABLES,
     add_bronze_metadata,
-    ingest_all,
     ingest_source,
     latest_batch,
     read_source,
 )
-from src.common.config import load_config
 from src.common.tables import read_table
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -128,22 +126,9 @@ def _manifest_counts() -> dict[str, tuple[int, int]]:
     return {Path(f).name: (int(n), int(c)) for f, n, c in rows}
 
 
-@pytest.fixture(scope="module")
-def real_bronze(spark, tmp_path_factory):
-    config = load_config(str(REPO_ROOT / "config" / "config.yaml"))
-    config["lakehouse"] = {"local_root": str(tmp_path_factory.mktemp("lh") / "lakehouse")}
-    config["run_id"] = "test-real"
-    config["sources"] = {
-        name: {**src, "local_path": str(REPO_ROOT / src["local_path"])}
-        for name, src in config["sources"].items()
-    }
-    first = ingest_all(spark, config)
-    second = ingest_all(spark, config)
-    return config, first, second
-
-
+@pytest.mark.slow
 def test_every_bronze_table_matches_manifest(spark, real_bronze):
-    config, first, _ = real_bronze
+    config, first = real_bronze.config, real_bronze.first
     manifest = _manifest_counts()
     assert len(first) == 12
     for result in first:
@@ -157,8 +142,9 @@ def test_every_bronze_table_matches_manifest(spark, real_bronze):
         assert len(read_source(spark, config, result.source_name).columns) == cols, source_file
 
 
+@pytest.mark.slow
 def test_bronze_tables_have_exact_names_and_string_columns(spark, real_bronze):
-    config, _, _ = real_bronze
+    config = real_bronze.config
     expected = {
         "bronze.leads_raw", "bronze.consent_events_raw", "bronze.calls_raw",
         "bronze.policies_raw", "bronze.marketing_spend_raw", "bronze.campaigns_raw",
@@ -174,14 +160,16 @@ def test_bronze_tables_have_exact_names_and_string_columns(spark, real_bronze):
                 assert isinstance(field.dataType, StringType), (name, field.name)
 
 
+@pytest.mark.slow
 def test_calls_raw_holds_both_files(spark, real_bronze):
-    config, _, _ = real_bronze
+    config = real_bronze.config
     calls = read_table(spark, config, "bronze.calls_raw")
     by_file = {r._source_file: r["count"] for r in calls.groupBy("_source_file").count().collect()}
     assert by_file == {"calls_uk_au.csv": 41_000, "calls_ca_us.csv": 23_000}
 
 
+@pytest.mark.slow
 def test_second_full_run_is_idempotent(spark, real_bronze):
-    config, first, second = real_bronze
+    config, second = real_bronze.config, real_bronze.second
     assert all(r.skipped and r.rows_appended == 0 for r in second)
     assert read_table(spark, config, "bronze.leads_raw").count() == 48_000

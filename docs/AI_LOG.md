@@ -203,3 +203,41 @@ into the real lakehouse.
 What was wrong: my step 5 version made two required keyword arguments a condition of
 calling the starter function, which broke the starter's call shape. The human caught it
 in review.
+
+### 2026-11-21  Step 6: silver reference data and dimensions
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): step 6 approved; tests first; decide defects 18 and 24 on evidence; CAD
+June as an error; orphan campaigns to UNKNOWN, flagged; keep both versions of the
+duplicated agents; assert_reconciled on real data; session-scoped bronze fixture; mark
+full-data tests slow.
+What it produced:
+- `src/silver/reference.py`: `silver.ref_channel`, `silver.ref_region`, `silver.campaign`,
+  `silver.fx_rate` and `silver.agent`, each reconciled (8, 4, 24, 11 and 45 rows in and
+  out; 0 quarantined). Exceptions on real data: 10 channel labels corrected, 2 campaigns
+  ending before they start (flagged), 313 orphan campaign ids on leads (310 on CMP-9999,
+  3 on CMP-1099; flagged, mapped with `conform_campaign_id`), 1 missing FX rate
+  (`2026-06|CAD`, error), 2 null regions and 2 contradicting teams corrected, and 6
+  duplicate-version agent rows flagged.
+- `src/sql/findings_reference.sql` plus `src/common/findings.py`; the tests run the named
+  queries, so every evidence number traces to SQL.
+- `tests/test_silver_reference.py`: 18 tests (7 unit on small fixtures; 11 slow on the
+  real data via the shared session bronze fixture in conftest). Confirmed failing first.
+- Decisions: defect 24 keeps the campaign channel (600 of 47,687 leads disagree after
+  normalisation; 23,644 raw). Defect 18: null region from the team prefix (AG0007 1,302
+  and AG0035 1,206 calls, all UK; the prefix matches the region on 41 of 43 rows).
+What was wrong or changed, and how I caught it:
+- Found my own step 4 bug while planning: `register_table` used CREATE TABLE IF NOT EXISTS,
+  so within one Spark session a table name kept its first location. Wrote the failing
+  test, fixed it, and committed that alone (a3b4658).
+- The register's "8,970 raw" channel disagreement could not be reproduced (the pipeline
+  measures 23,644 raw). Recorded in the register rather than forced.
+- My ASSUMPTIONS edit script first failed because the human had rewritten entry 5
+  meanwhile. Re-read the file and re-applied only entries 4 and 16; entry 5 is untouched.
+Open: bronze landing takes about 2 minutes for 12 small files, and the suite is slow
+because of it. ASSUMPTIONS.md is about 1,200 words, against a 300 to 500 target.
+Bronze does not keep source row order, which assumption 8 (SCD2 by file order) needs at
+step 10.
+- Mistake found during step 6: my step 4 commit (4d867eb) included the human's own rewrite
+  of ASSUMPTIONS entry 5 (timezone evidence), because I staged the whole file to add entry
+  15 without checking its diff. The commit message does not mention it. Not rewritten
+  (no amending); recorded here. From now on, inspect each file's full diff before staging.

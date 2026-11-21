@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
@@ -60,6 +61,7 @@ CHECK_DEFECTS: dict[str, int] = {
     "lead_pk_conflict": 2,
     "campaign_orphan_id": 5,
     "channel_label_variant": 8,
+    "channel_label_unmapped": 8,
     "campaign_end_before_start": 9,
     "fx_rate_missing": 12,
     "agent_duplicate_version": 18,
@@ -71,6 +73,17 @@ CHECK_DEFECTS: dict[str, int] = {
 
 class ReconciliationError(AssertionError):
     """Rows in do not equal rows out plus rows quarantined."""
+
+
+@dataclass(frozen=True)
+class StageResult:
+    """Row counts for one silver table, as reconciled by `assert_reconciled`."""
+
+    table: str
+    source_table: str
+    rows_in: int
+    rows_out: int
+    rows_quarantined: int
 
 
 @cache

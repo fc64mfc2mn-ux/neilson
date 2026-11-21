@@ -28,3 +28,29 @@ Task: read the case study pack, profile the data, draft the requirements breakdo
 analysis and build plan.
 Wrong or changed: to be filled in as errors are caught.
 Kept by hand: final KPI wording; the three governance risks.
+
+### 2026-11-21  Step 1: scaffold checks (venv, data hashes, Java, starter fixture)
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim): "Read CLAUDE.md and docs/PLAN.md. Then do step 1 only: set up the venv,
+verify the data/ hashes against MANIFEST.md, check java -version is 17, and run the starter
+test fixture. Show me the result of the check before doing anything else. Log the task in
+docs/AI_LOG.md."
+What it produced:
+- `.venv` (Python 3.11.2) with pyspark 3.5.1, delta-spark 3.2.0, pytest 8.2.2, ruff 0.5.0.
+- A read-only check of all 12 files in `data/MANIFEST.md`: SHA-256, row count and column
+  count all match. Not covered by the manifest (no hash to check against):
+  `legacy/sp_MarketingLeadSummary.sql` and the three `stakeholder_notes/*.md`.
+- `java -version` gave OpenJDK 21.0.1 (Homebrew), the only JDK installed, so the check
+  failed at first. With approval: `brew install openjdk@17` (17.0.21.1). `JAVA_HOME` set to
+  `/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home`, exported in
+  `.venv/bin/activate`, so the system default is still 21.
+- Check passed: a throwaway test using the `spark` fixture started a local Spark 3.5.1
+  session with the Delta extension and catalog on Java 17, wrote a 3-row Delta table to the
+  temp warehouse and read it back. The test file was deleted afterwards. Full `pytest`:
+  6 skipped (stubs). `ruff check .`: clean.
+What was wrong or changed, and how I caught it: the first throwaway test also asserted that
+`spark.sql.session.timeZone` was set. That isn't a step 1 requirement, and it failed: the
+starter `spark_session.py` sets no timezone (it shows as None, so the JVM local zone is
+used). I caught it in the test output, dropped the assertion and noted the gap. Setting UTC
+is part of step 3.
+Kept by hand (not delegated): approving the Java 17 install and choosing the JAVA_HOME path.

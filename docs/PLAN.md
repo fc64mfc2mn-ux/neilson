@@ -28,6 +28,16 @@ Order is dependency order. Deadline Thu 26 Nov 2026; target submission Wed 25 No
 | 21 | **Documents.** All of `docs/`, plus README. | Required sections present; word counts in range. Commit. |
 | 22 | **Final review.** Fresh clone, one-command run on the Mac, `data/` hashes, lint, tests, secrets check, then email Emily. | All pass. |
 
+Design decisions fixed for later steps (detail in `CLAUDE.md` and `ASSUMPTIONS.md` 17):
+
+- SCD2 is `gold.dim_agent` only (step 10, windows in `_source_row` order); `silver.agent`
+  keeps every version, undated.
+- RLS has one source, `gold.bridge_user_region`: the Power BI `Regional_Analyst` role at
+  step 17 (core), a Unity Catalog row filter on `region_key` plus a no-PII mask or view at
+  step 20 (stretch). `ALL` = unrestricted; unmapped = no rows. Star schema, no wide table.
+- `platform_architecture.md` states the limits: UC filters are tested with fixtures only
+  (not runnable locally), and they apply to Power BI only with DirectQuery and SSO.
+
 If time slips, cut from the bottom of the stretch list (20, then 19), never steps 1 to 13.
 
 ## Schedule (about 29 hours)

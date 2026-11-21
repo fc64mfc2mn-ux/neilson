@@ -126,3 +126,9 @@ confirm or overturn. The query and the result will be recorded against the entry
     *Options:* leave `UNKNOWN`; use the team prefix. *Choice:* team prefix (UK). *Reason:*
     both take calls only in the UK, and the prefix matches the region on 41 of 43 rows
     (`findings_reference.sql`). *Reverse:* drop the fallback in `conform_agents`.
+
+17. **Row-level security source.** *Ambiguity:* where region entitlements live. *Options:*
+    per-report role rules; a wide denormalised table; one bridge. *Choice:*
+    `gold.bridge_user_region` drives both the Power BI role and the Unity Catalog row
+    filter, matched on `region_key`; `ALL` is unrestricted, unmapped users see nothing.
+    *Reason:* one source, star schema kept. *Reverse:* edit the bridge.

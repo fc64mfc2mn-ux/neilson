@@ -97,6 +97,20 @@ pytest
   hypothesis) and logged in `docs/ASSUMPTIONS.md`, not assumed.
 - **Starter config bug:** `calls_ca_us` is declared `sep: ";"` but the file is
   comma-delimited. Fix it and record it as a finding.
+- **SCD2 scope:** only `gold.dim_agent` is SCD2 (one row per agent per validity window:
+  `valid_from`, `valid_to`, `is_current`, plus `UNKNOWN`). `silver.agent` keeps every
+  version without dates; step 10 builds the windows in `_source_row` order (assumption 8).
+- **RLS, one source of truth:** `gold.bridge_user_region`. Power BI `Regional_Analyst`
+  filters on `USERPRINCIPALNAME()` against it (core, step 17; view-as evidence for a
+  two-region user and an unmapped user). Data layer (step 20, stretch): a Unity Catalog
+  row filter on each fact's `region_key` using the bridge, plus a column mask or no-PII
+  view for `Marketing_Analyst_NoPII`. Region `ALL` = no restriction; unmapped user = no
+  rows. No wide table: keep the star schema.
+- **Limits to state in `docs/platform_architecture.md`:** UC row filters cannot run in
+  local Spark, so they are SQL tested against the entitlements matrix with fixtures only.
+  Power BI Import with a shared service account does not pass the user's identity to UC;
+  the data-layer filter applies only with DirectQuery and SSO passthrough, so the Power BI
+  role stays as defence in depth.
 
 ## Reference implementation (read-only)
 

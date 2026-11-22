@@ -16,6 +16,9 @@ Two versions sit side by side in `src/sql/`, run by `src/legacy_port.py`:
 is reproducible; `@RegionCode` is `region_code`. Every number below comes from a named query
 in `src/sql/findings_legacy.sql` (run at that `as_of`) and is asserted in
 `tests/test_legacy_parity.py`, which also has one fixture test per difference.
+The procedure was not executed on SQL Server, so the overflow (error 8115, difference 4)
+and the collation behaviour (difference 10) are derived from T-SQL semantics, while the
+Spark behaviour was tested.
 
 | # | Difference | Cause in the procedure | Evidence query | Number | Business impact |
 | --- | --- | --- | --- | --- | --- |

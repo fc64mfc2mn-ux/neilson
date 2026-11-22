@@ -148,10 +148,10 @@ order of `docs/PLAN.md` steps 4 onward. Known traps in it (each needs a test her
 ## Expected counts (independently verified)
 
 Leads 47,997 distinct ids -> 47,201 surviving (3 PK conflicts, 758 duplicates, 35
-unidentifiable). Calls 64,000 rows -> 62,835 (540 exact duplicates, 380 end before
-start, 245 start before their lead; by distinct call id 63,460 -> 62,835, confirmed
-independently). Policies 5,200 -> 5,172. Any difference is explained, never forced to
-match.
+unidentifiable). Calls 64,000 rows -> 62,829 (540 exact duplicates, 380 end before
+start, 251 start before their lead, after the AU Sydney conversion; by distinct call id
+63,460 -> 62,829, confirmed independently; 245 before the conversion). Policies 5,200
+-> 5,172. Any difference is explained, never forced to match.
 
 ## Git conventions
 

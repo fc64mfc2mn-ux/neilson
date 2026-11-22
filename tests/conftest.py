@@ -82,3 +82,12 @@ def real_reference(spark, real_bronze):
     config = {**real_bronze.config, "run_id": "test-silver"}
     results = {r.table: r for r in build_reference(spark, config)}
     return config, results
+
+
+@pytest.fixture(scope="session")
+def real_leads(spark, real_reference):
+    """Step 7 silver leads and consent, built once on the real bronze (shared by step 8)."""
+    from src.silver.leads import build_consent, build_leads
+
+    config, _ = real_reference
+    return config, build_leads(spark, config), build_consent(spark, config)

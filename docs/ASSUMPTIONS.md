@@ -29,18 +29,18 @@ confirm or overturn. The query and the result will be recorded against the entry
    normalisation only 600 of 47,687 leads disagree, scattered across all channel pairs
    (`findings_reference.sql`). *Reverse:* switch the `channel_key` source in gold.
 
-5. Call-file timezones (evidence recorded; AU unresolved).
-   Ambiguity: neither call file states its timezone.
-   Options: treat as UTC; convert from the region's local zone (DST-aware); fixed offset.
-   Choice: UK, CA and US call timestamps are treated as UTC. Median first-call gap after
-   lead creation is 22 min (UK), 44 min (CA) and 40 min (US) as UTC, but about 280 min for
-   CA and US if read as local time. AU is unexplained: 18.5 h as UTC, 8.4 h as Sydney local
-   time, against about 22 min expected. AU timestamps are kept as UTC, flagged in the data
-   quality output, and not corrected.
-   Reason: only the UK, CA and US hypotheses are supported by the data. A Sydney conversion
-   would look fixed but leaves an 8 h error.
-   Reverse: change the per-region timezone in config and rerun. Next test: check whether AU
-   lead timestamps are the shifted side.
+5. **Call-file timezones (evidence recorded; AU unresolved).**
+   *Ambiguity:* neither call file states its timezone. *Options:* UTC; region local time
+   (DST-aware); a fixed offset. *Choice:* every region kept as stored, as UTC. Median
+   first call after lead creation, as UTC: 22 min (UK), 45 (CA), 40 (US); as local time:
+   -38, 285, 280. AU: 1,111 min as UTC, 509 as Sydney time; neither fits. AU calls are
+   flagged, not converted. *Which side is shifted:* policy application dates match the
+   linked call's date for every UK, CA and US policy, but for only 248 of 426 AU
+   policies. Moving AU calls back exactly 10 h makes all 426 match. AU lead ingestion
+   lag (2.7 min) equals every other region's. So the AU calls carry a +10 h offset and
+   the leads look unshifted, yet 8.5 h stays unexplained after the correction.
+   *Reverse:* `calls.source_timezone` in config (for example `AU: Australia/Sydney`),
+   then update the AU gap test. Queries: `src/sql/findings_calls.sql`.
 
 6. **Minor-unit spend (pending evidence).** *Ambiguity:* some GBP and AUD spend rows sit
    far above their campaign's median, consistent with pence or cents. *Options:* keep;
@@ -144,3 +144,12 @@ confirm or overturn. The query and the result will be recorded against the entry
     first lead; phone formats vary. *Choice:* chained gaps, linked across email and phone;
     phone compared on digits only. *Reason:* gives 758 duplicates and 47,201 survivors.
     *Reverse:* `src/silver/dedupe_leads.py`.
+
+20. **Calls on unknown leads (defect 17).** *Ambiguity:* 1,100 calls name a lead id found
+    in no lead file. *Options:* quarantine; keep against an `UNKNOWN` lead. *Choice:*
+    keep, flag `call_lead_not_found`, map to `UNKNOWN` in gold; the same for 45 calls
+    on leads quarantined at step 7, and for AG9001 to AG9004 (`UNKNOWN` agent).
+    *Reason:* all 1,099 ids follow `LD-GHOST-<region>-<n>`, none matches a quarantined,
+    PK-conflict or out-of-period lead, and no policy links to them. The calls are real
+    agent work for handle time and grade of service; they cannot enter the lead-grain
+    funnel either way. *Reverse:* quarantine the flagged rows in `src/silver/calls.py`.

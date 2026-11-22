@@ -346,3 +346,29 @@ config.yaml overriding them; the runner passes them to `get_spark`.
 Timing, slow set (`pytest -m slow`, 30 tests): before 116 s (human's baseline),
 after 106.7 s. About 8% faster, from a single run each, so treat it as indicative.
 Most of the remaining time is bronze landing (many small Delta writes), not shuffles.
+
+### 2026-11-22  Step 8: silver calls (defects 13 to 17 and 26)
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): union both call files, seconds and UTC; timezone by evidence with the
+queries in findings_calls.sql and a test pinning the AU gap; check whether AU leads are
+the shifted side; reconcile 64,000 rows rule by rule; quarantine impossible times with a
+severity; decide defect 17; flag defect 26; tests first.
+What it produced: `src/silver/normalise_calls.py`, `src/silver/calls.py`,
+`src/sql/findings_calls.sql` (8 named queries), 7 fast and 9 slow tests written first
+and confirmed failing; a `calls` block in config; register, assumption 5, new
+assumption 20. Result: 64,000 = 62,835 + 540 + 380 + 245.
+Findings beyond the prompt: the register counts raw rows (262 = UK/AU end-before-start
+rows with duplicates; 380 distinct across both files). CLAUDE.md's 62,830 assumed a
+rounded 250 before-lead calls; the query gives 245. Policy dates show AU calls carry a
++10 h offset, while AU lead ingestion lag matches other regions; 8.5 h remains
+unexplained, so AU stays as stored pending a human decision. DO_NOT_CALL also affects
+CA and US (1,966 calls).
+Mistakes caught: (1) region counts in a test were typed before being derived; caught
+on review and replaced with the profiled figures before the first run. (2) Timestamp
+asserts failed because `collect()` converts to the Mac's local time; now formatted in
+Spark. (3) A Spark `raise_error` for conflicting call ids surfaced as a Spark exception,
+not `ReconciliationError`; the test caught it and the check became eager. (4) The AU
+silver test expected the bronze median exactly; silver drops quarantined calls (1,113
+vs 1,111), so it now checks row-level equality with bronze instead.
+Reference trap found: the earlier attempt nulled CA/US wrap-up code, SLA flag,
+compliance flag and queue wait, which the file does contain; a test now guards it.

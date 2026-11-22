@@ -98,6 +98,18 @@ sources:
     options:
       header: true
 
+
+# Call timestamps (assumption 5, defect 15). Source timezone per region: UTC keeps the
+# stored value; an IANA zone (e.g. Australia/Sydney) converts local time to UTC.
+calls:
+  source_timezone:
+    UK: UTC
+    AU: UTC
+    CA: UTC
+    US: UTC
+  # Kept as stored but flagged: the first-call offset is not explained by any zone.
+  timestamp_unverified_regions: [AU]
+
 lakehouse:
   local_root: lakehouse
   azure_root: abfss://lakehouse@nfsdatalakedev.dfs.core.windows.net

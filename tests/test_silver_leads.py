@@ -12,8 +12,6 @@ from src.common.dq import read_dq_exceptions
 from src.common.findings import run_finding
 from src.common.tables import read_table
 from src.silver.leads import (
-    build_consent,
-    build_leads,
     implausible_dob,
     null_implausible_dob,
     primary_key_conflicts,
@@ -103,12 +101,6 @@ def test_resolve_consent_latest_event_and_phone_flag(spark):
 
 
 # ------------------------------------------------------------------ real data
-
-
-@pytest.fixture(scope="module")
-def real_leads(spark, real_reference):
-    config, _ = real_reference
-    return config, build_leads(spark, config), build_consent(spark, config)
 
 
 def _checks(spark, config, name):

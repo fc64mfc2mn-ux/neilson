@@ -31,6 +31,7 @@ from src.common.config import (
 )
 from src.common.logging_setup import get_logger
 from src.common.spark_session import get_spark, spark_settings, stop_spark
+from src.gold.apply_pii_policy import build_dim_lead
 from src.gold.build_dimensions import build_dimensions
 from src.gold.build_facts import build_facts
 from src.gold.build_lead_funnel import build_lead_funnel
@@ -42,6 +43,7 @@ STAGES: list[tuple[str, Stage]] = [
     ("bronze.ingest_all", ingest_all),
     ("silver.build_silver", build_silver),
     ("gold.build_dimensions", build_dimensions),
+    ("gold.build_dim_lead", build_dim_lead),
     ("gold.build_facts", build_facts),
     ("gold.build_lead_funnel", build_lead_funnel),
 ]

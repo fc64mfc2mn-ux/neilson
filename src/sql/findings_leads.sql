@@ -137,3 +137,25 @@ banded AS (
 SELECT band, COUNT(*) AS leads, SUM(nulled) AS nulled
 FROM banded WHERE band IS NOT NULL
 GROUP BY band ORDER BY band;
+
+-- name: postcode_region_format
+-- Defect 29 (step 11): surviving leads whose postcode is not in its region's format, by
+-- region and shape (letters as A, digits as 9). Rules: POSTCODE_RULES in
+-- src/gold/apply_pii_policy.py. Asserted in tests/test_pii_policy.py.
+WITH pc AS (
+    SELECT region_code, UPPER(REGEXP_REPLACE(TRIM(postcode), ' +', ' ')) AS p
+    FROM silver.lead
+    WHERE postcode IS NOT NULL
+)
+SELECT region_code,
+       REGEXP_REPLACE(REGEXP_REPLACE(p, '[A-Z]', 'A'), '[0-9]', '9') AS shape,
+       COUNT(*) AS leads
+FROM pc
+WHERE NOT (
+       (region_code = 'UK' AND p RLIKE '^[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][A-Z]{2}$')
+    OR (region_code = 'CA' AND p RLIKE '^[A-Z][0-9][A-Z] [0-9][A-Z][0-9]$')
+    OR (region_code = 'US' AND p RLIKE '^[0-9]{5}$')
+    OR (region_code = 'AU' AND p RLIKE '^[0-9]{4}$')
+)
+GROUP BY region_code, shape
+ORDER BY region_code, shape;

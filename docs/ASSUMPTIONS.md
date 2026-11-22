@@ -173,3 +173,15 @@ confirm or overturn. The query and the result will be recorded against the entry
     below 2^53 so Power BI's double-precision numbers hold every key exactly (60 bits did
     not); deterministic, with a collision test per dimension. *Reverse:* `KEY_HEX_DIGITS`
     in `src/gold/build_dimensions.py`.
+
+25. **Lead PII generalisation (step 11).** *Postcode, by region, from the formats seen:*
+    UK `A9 9AA`, `AA9 9AA`, `AA99 9AA` keep the outward code (before the space); CA
+    `A9A 9A9` keeps the forward sortation area (3 characters); US `99999` keeps ZIP3; AU
+    `9999` has no outward part and the full code would be the raw value, so the first 3
+    digits. A postcode not in its region's format is withheld, not guessed (defect 29).
+    *Phone:* E.164 from the digits (UK, AU, NANP national and international forms), so
+    one number written four ways hashes the same. *Age band:* decades of whole-year age at
+    lead creation, `18-19` first, `90+` last, `UNKNOWN` for a null DOB. *Consent:* the
+    latest event in `silver.consent_current`; a lead with no event keeps its capture flag,
+    labelled `lead_capture`. *Reverse:* `POSTCODE_RULES`, `phone_e164`, `age_band` in
+    `src/gold/apply_pii_policy.py`.

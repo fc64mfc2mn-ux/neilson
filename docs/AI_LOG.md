@@ -454,3 +454,29 @@ AG9004 are not agent ids in the dimension, so 615 unmatched (to `UNKNOWN`) was r
 fixed before running. (2) The call-resolution test built timestamps from Python
 datetimes, which the host reads as BST, so 00:00 on 1 April became 31 March; the test
 now builds UTC timestamps in Spark. The same trap hit step 8.
+
+### 2026-11-22  Step 11: 52-bit keys, PII policy and gold.dim_lead
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, opening): "Step 11 is approved: PII policy and gold.dim_lead (PLAN.md
+step 11). Same method: tests first, confirm they fail, implement, reconcile, commit the
+slice, stop and report."
+What it produced: slice 11a: surrogate keys cut from 60 to 52 bits (below 2^53, exact in
+Power BI), with Python parity, a collision test per dimension and a rebuild from empty
+gold; `agent_name` dropped from `dim_agent`. Slice 11b: `src/gold/apply_pii_policy.py`
+(salted SHA-256 in a UDF so the salt never enters a Spark plan; E.164 phones; decade age
+bands; outward postcode per region; consent from `consent_current`), `gold.dim_lead`
+(47,201) and `gold.dim_lead_nopii`, a leak scan over every gold column against real
+silver and bronze values that also runs in the pipeline, defect 29 (24 postcodes in the
+wrong format for their region), assumption 25, `docs/DATA_CLASSIFICATION.md`.
+Mistakes caught: (1) the first full scan stopped the run: `dim_date` month labels "May"
+and "June" equal real surnames and first names. Exempted calendar labels from name
+checks only, with a test that a raw email in the same column is still caught. (2) The
+consent fixtures used 'Y'/'N' strings, but `consent_current` holds booleans; caught
+reading the silver code before implementing. (3) Integer columns (the year 2026) equal
+four-digit AU postcodes, so non-string columns are compared with phone values only;
+designed in before the first run, with a test. (4) Twice ran Python without the venv
+active. (5) Misread an overlapping print as a duplicated assumption 23; an assertion in
+the edit script stopped the change.
+Open: the brief names no no-PII view, so `gold.dim_lead_nopii` is our name. Dedup at
+step 7 compares digits-only phones, while the gold hash uses E.164, so the same number
+written in national and international form is not linked by dedup. Not measured yet.

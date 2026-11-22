@@ -86,6 +86,7 @@ GOLD_TABLES = (
     "gold.dim_campaign",
     "gold.dim_product",
     "gold.dim_agent",
+    "gold.dim_agent_seniority",
     "gold.dim_lead",
     "gold.dim_lead_nopii",
     "gold.fact_lead",

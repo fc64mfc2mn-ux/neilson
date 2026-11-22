@@ -4,8 +4,10 @@ Produces `gold.dim_date` (2026-01-01 to 2026-12-31, calendar quarters as
 `fiscal_quarter`, assumption 12), `gold.dim_region` (from ref_region, with
 `timezone`, `gos_target_seconds` and the region group of assumption 1),
 `gold.dim_channel` and `gold.dim_campaign` (SCD1, each plus an `UNKNOWN`
-member), `gold.dim_product` (`TERM_LIFE`, `OVER50`, `CI`) and `gold.dim_agent`
-(SCD2: one row per agent per validity window, plus an `UNKNOWN` member).
+member), `gold.dim_product` (`TERM_LIFE`, `OVER50`, `CI`), `gold.dim_agent`
+(SCD2: one row per agent per validity window, plus an `UNKNOWN` member) and
+`gold.dim_agent_seniority` (`agent_key`, `seniority_band`: the tier 2 band in a table
+of its own, so Power BI object-level security can hide it whole; step 16b).
 `gold.dim_lead` is built at step 11 (src/gold/apply_pii_policy.py).
 
 Surrogate keys are deterministic: the first 52 bits (13 hex digits) of
@@ -242,6 +244,14 @@ def dim_agent(agent: DataFrame) -> DataFrame:
     )
 
 
+def dim_agent_seniority(dim: DataFrame) -> DataFrame:
+    """One row per dim_agent row (SCD2 version): its seniority band; UNKNOWN is labelled."""
+    band = F.when(F.col("agent_key") == UNKNOWN_KEY, F.lit("Unknown")).otherwise(
+        F.col("seniority_band")
+    )
+    return dim.select("agent_key", band.alias("seniority_band"))
+
+
 def resolve_agent(calls: DataFrame, dim: DataFrame, day: Column | None = None) -> DataFrame:
     """Add `agent_key`: the version valid on `day` (default: the call's UTC date), else -1."""
     versions = dim.select(
@@ -294,4 +304,14 @@ def build_dimensions(spark: SparkSession, config: dict) -> list[DimResult]:
             )
         results.append(DimResult(table, source, rows_in, rows_out, unknown))
         log.info("Reconciled %s: %d from %s + %d UNKNOWN", table, rows_in, source, unknown)
+    # Built from the written dim_agent, so it shares every agent_key (UNKNOWN included).
+    agents = t("gold.dim_agent")
+    overwrite_table(spark, dim_agent_seniority(agents), config, "gold.dim_agent_seniority")
+    rows_in, rows_out = agents.count(), t("gold.dim_agent_seniority").count()
+    if rows_out != rows_in:
+        raise ReconciliationError(
+            f"gold.dim_agent_seniority: {rows_out} rows != {rows_in} in gold.dim_agent"
+        )
+    results.append(DimResult("gold.dim_agent_seniority", "gold.dim_agent", rows_in, rows_out, 0))
+    log.info("Reconciled gold.dim_agent_seniority: %d from gold.dim_agent", rows_out)
     return results

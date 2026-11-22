@@ -1,5 +1,5 @@
 """Step 10: gold dimensions (dim_date, dim_region, dim_channel, dim_campaign,
-dim_product, dim_agent as SCD2). dim_lead is step 11."""
+dim_product, dim_agent as SCD2, dim_agent_seniority). dim_lead is step 11."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from src.gold.build_dimensions import (
     build_dim_date,
     build_dimensions,
     dim_agent,
+    dim_agent_seniority,
     dim_campaign,
     dim_channel,
     key_coverage,
@@ -104,6 +105,29 @@ def test_dim_agent_scd2_windows_follow_source_row_order(spark):
     # Data minimisation: employee names stay in silver (brief tier 2).
     assert "agent_name" not in dim_agent(silver).columns
     assert len({r.agent_key for r in rows.values()}) == 4
+
+
+def test_dim_agent_seniority_is_one_row_per_agent_version_with_unknown_labelled(spark):
+    """The tier 2 seniority band in its own table (step 16b), so object-level security
+    can hide it whole; it keys on agent_key, so each SCD2 version keeps its own band."""
+    silver = spark.createDataFrame(
+        [
+            ("A1", "Ann", "CA", "CA-Team-Beta", "Trainee", True, 8),
+            ("A1", "Ann", "CA", "CA-Team-Beta", "Core", True, 43),
+            ("B1", "Bob", "UK", "UK-Team-Alpha", "Senior", True, 2),
+        ],
+        AGENT_COLS,
+    )
+    dim = dim_agent(silver)
+    seniority = dim_agent_seniority(dim)
+    assert seniority.columns == ["agent_key", "seniority_band"]
+    got = {r.agent_key: r.seniority_band for r in seniority.collect()}
+    want = {r.agent_key: r.seniority_band for r in dim.collect()}
+    assert set(got) == set(want) and len(got) == seniority.count() == 4
+    assert got[UNKNOWN_KEY] == "Unknown"
+    assert {k: v for k, v in got.items() if k != UNKNOWN_KEY} == {
+        k: v for k, v in want.items() if k != UNKNOWN_KEY
+    }
 
 
 def test_dim_agent_has_no_rule_for_three_versions(spark):
@@ -213,6 +237,7 @@ def test_each_dimension_reconciles_to_its_silver_source(spark, real_gold):
         "gold.dim_campaign": (24, 25, 1),
         "gold.dim_product": (3, 3, 0),  # distinct codes across lead, campaign, policy
         "gold.dim_agent": (45, 46, 1),  # 42 agents, 3 with two versions
+        "gold.dim_agent_seniority": (46, 46, 0),  # one row per dim_agent row
     }
     for table, (rows_in, rows_out, unknown) in expect.items():
         r = results[table]

@@ -438,7 +438,8 @@ def test_the_scan_covers_every_gold_table_in_the_brief():
         "gold.fact_lead", "gold.fact_call", "gold.fact_policy", "gold.fact_lead_funnel",
         "gold.bridge_lead_call", "gold.bridge_user_region",
     }  # fmt: skip
-    assert set(GOLD_TABLES) == brief | {"gold.dim_lead_nopii"}
+    # Added: the no-PII lead table (step 11) and the tier 2 seniority table (step 16b).
+    assert set(GOLD_TABLES) == brief | {"gold.dim_lead_nopii", "gold.dim_agent_seniority"}
 
 
 @pytest.mark.parametrize(

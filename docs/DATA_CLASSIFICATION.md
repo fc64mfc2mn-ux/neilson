@@ -65,12 +65,14 @@ and `recording_url` (tier 3); policy `underwriting_decision` (tier 3); agent `ag
 | `gold.dim_agent` | `agent_id` | 2 | Kept: employee identifier, needed by Ops; hidden from roles without tier 2 |
 | `gold.dim_agent` | `region_code` | 1 | Kept |
 | `gold.dim_agent` | `team` | 1 | Kept |
-| `gold.dim_agent` | `seniority_band` | 2 | Kept: HR data (brief), needed by Ops; hidden from roles without tier 2 |
+| `gold.dim_agent` | `seniority_band` | 2 | Kept: HR data (brief), needed by Ops; the Power BI model takes it from `dim_agent_seniority` instead and removes it here |
 | `gold.dim_agent` | `active_flag` | 1 | Kept |
 | `gold.dim_agent` | `valid_from` | 1 | Kept (SCD2, assumption 8) |
 | `gold.dim_agent` | `valid_to` | 1 | Kept (SCD2, assumption 8) |
 | `gold.dim_agent` | `is_current` | 1 | Kept (SCD2) |
 | `gold.dim_agent` | `source_row` | 1 | Kept: lineage to the roster row |
+| `gold.dim_agent_seniority` | `agent_key` | 1 | Surrogate key, one row per `dim_agent` row |
+| `gold.dim_agent_seniority` | `seniority_band` | 2 | HR data (brief), for the seniority visual; a table of its own so object-level security hides it whole from roles without tier 2 (`UNKNOWN` labelled `Unknown`) |
 | `gold.dim_lead` | `lead_key` | 1 | Surrogate key (52-bit hash of `lead_id`) |
 | `gold.dim_lead` | `lead_id` | 2 | Kept: pseudonymous, links to source records holding names and contacts |
 | `gold.dim_lead` | `created_at_utc` | 1 | Kept |

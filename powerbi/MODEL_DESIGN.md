@@ -17,7 +17,7 @@ Row counts are asserted in `tests/test_gold_facts.py` and `tests/test_gold_dimen
 | `dim_region` | Yes | `timezone`, `business_hours_start`, `business_hours_end` | `region_key` |
 | `dim_channel` | Yes | none | `channel_key` |
 | `dim_campaign` | Yes | none | `campaign_key`, `channel_code`, `region_code`, `product_code` |
-| `dim_agent` | Yes | `seniority_band` (kept in gold: the SCD2 versions of AG0008 and AG0037 differ only by it; the model takes it from `dim_agent_seniority`), `source_row` | `agent_key`; `agent_id` is tier 2, step 17 hides it |
+| `dim_agent` | Yes | `seniority_band` (kept in gold: the SCD2 versions of AG0008 and AG0037 differ only by it; the model takes it from `dim_agent_seniority`), `source_row` | `agent_key` (`agent_id` stays visible: decided, tier 2) |
 | `dim_agent_seniority` | Yes: `agent_key`, `seniority_band` (tier 2, its own table so step 17's object-level security can hide it whole) | none | `agent_key` |
 | `dim_product` | Yes | none | `product_key` |
 | `dim_lead_nopii` | Yes, keeps its name | `created_date`, `region_code`, `campaign_id`, `channel_code` (the dimensions own them) | `lead_key`, `age_band_sort` |

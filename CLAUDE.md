@@ -53,11 +53,11 @@ polish a lower one.
 4. **No secrets in code or git.** The PII hash salt comes from `config/secrets.json`
    (gitignored), loaded via `src/common/config.py`. Only `config/secrets.example.json`
    with placeholders is committed. `lakehouse/` is never committed.
-5. **Bronze does no cleansing:** all columns strings, plus `_ingest_ts`, `_source_file`,
+5. **Bronze does no cleansing:** all columns strings, plus `_ingest_ts`, `_source_file`, `_source_row`,
    `_row_hash`, append-only.
 6. **One command runs everything:** `python -m src.run_pipeline --config config/config.yaml`.
 7. **Every rejected row goes to `silver.dq_exception`** through `src/common/dq.py` with
-   `check_name`, `source_table`, `key_value`, `severity`, `detected_at_utc`.
+   `check_name`, `defect_id`, `source_table`, `key_value`, `severity`, `action`, `run_id`, `detected_at_utc`.
 8. **Every number quoted in a document must come from a query kept in the repo**
    (put them in `src/sql/findings_*.sql` or a test), so findings are reproducible.
 9. **Every stage ships with its tests, and reconciliation checks run at every stage.**
@@ -130,9 +130,12 @@ copy files wholesale. Read it, then write a cleaner version here, stage by stage
 order of `docs/PLAN.md` steps 4 onward. Known traps in it (each needs a test here):
 
 - **AU call timezone.** UK, CA and US call timestamps behave as UTC (median first-call
-  gap 22 to 44 minutes). AU is not explained by "Sydney local" (still about 8 hours off).
-  Don't hard-code a Sydney conversion: keep AU as is, in UTC, flag the residual offset in
-  `silver.dq_exception` and `ASSUMPTIONS.md`, and test the observed gap.
+  gap 22 to 44 minutes). AU call times are shifted: every region's policy application
+  date matches its linked call's date, and for AU that holds for all 426 policies only
+  after moving call times back exactly 10 hours. Convert AU with Australia/Sydney,
+  set per region in config. About 8.5 hours of first-call gap remains unexplained after
+  conversion: keep it flagged, don't correct it further, and test it. The policy-date
+  match is a permanent test for every region.
 - **The funnel's grain.** `bridge_lead_call` is not the funnel. `fact_lead_funnel` has one
   row per surviving lead (47,201 expected), and a test asserts it.
 - **DQ gate.** No zero threshold: about 675 error rows are expected. Gate on the expected
@@ -145,8 +148,10 @@ order of `docs/PLAN.md` steps 4 onward. Known traps in it (each needs a test her
 ## Expected counts (independently verified)
 
 Leads 47,997 distinct ids -> 47,201 surviving (3 PK conflicts, 758 duplicates, 35
-unidentifiable). Calls 64,000 -> 62,830 (540 + 250 + 380 removed). Policies 5,200 ->
-5,172. Any difference is explained, never forced to match.
+unidentifiable). Calls 64,000 rows -> 62,835 (540 exact duplicates, 380 end before
+start, 245 start before their lead; by distinct call id 63,460 -> 62,835, confirmed
+independently). Policies 5,200 -> 5,172. Any difference is explained, never forced to
+match.
 
 ## Git conventions
 
@@ -175,5 +180,7 @@ governance risks.
 
 ## Where things stand
 
-Steps 1 to 3 done (scaffold; assumptions and defect status; config, UTC session, runner).
-Next: step 4 of `docs/PLAN.md` (bronze).
+Steps 1 to 8 done: scaffold; assumptions and defect status; config, UTC session, runner;
+bronze (append-only, `_source_row`); DQ framework; silver reference tables; silver leads
+and consent; silver calls (AU converted, defect 17 kept and flagged, defect 26 flagged).
+Next: step 9 of `docs/PLAN.md` (silver policy and spend).

@@ -83,8 +83,8 @@ def _model_fixture(spark):
         spark,
         dim_region=REGIONS,
         dim_date=(
-            [(D_APR, "2026-04"), (D_MAY, "2026-05")],
-            "date_key int, year_month string",
+            [(D_APR, 2026, 2, "2026-04"), (D_MAY, 2026, 2, "2026-05")],
+            "date_key int, year int, quarter int, year_month string",
         ),
         dim_channel=([(7, "TV"), (8, "WEB")], "channel_key long, channel_code string"),
         dim_agent_seniority=(
@@ -93,36 +93,37 @@ def _model_fixture(spark):
         ),
         fact_lead_funnel=(
             [
-                (1, 1, D_APR, 7, 31, Decimal("10"), "0-15 min", 1),
-                (2, 1, D_APR, 7, 32, Decimal("20"), "15-30 min", 0),
-                (3, 1, D_APR, 8, 31, Decimal("40"), "30-60 min", 0),
-                (4, 1, D_APR, 8, None, None, None, 0),  # never called
-                (5, 2, D_MAY, 7, 32, Decimal("7"), "0-15 min", 1),
+                (1, 1, D_APR, 7, 31, Decimal("10"), "0-15 min", 1, True),
+                (2, 1, D_APR, 7, 32, Decimal("20"), "15-30 min", 0, True),
+                (3, 1, D_APR, 8, 31, Decimal("40"), "30-60 min", 0, True),
+                (4, 1, D_APR, 8, None, None, None, 0, True),  # never called
+                (5, 2, D_MAY, 7, 32, Decimal("7"), "0-15 min", 1, True),
             ],
             "lead_key long, region_key long, lead_created_date_key int, channel_key long, "
             "last_call_agent_key long, minutes_to_first_call decimal(12,2), "
-            "first_call_bucket string, connected_call_count int",
+            "first_call_bucket string, connected_call_count int, "
+            "lead_in_business_hours_flag boolean",
         ),
         fact_policy=(
             [
-                (1, 1, True, "INFORCE", D_APR, 7, 31),  # counted in April (lead month)
-                (2, 1, True, "CANCELLED", D_APR, 7, 32),  # counted: it was sold
-                (3, 1, True, "NTU", D_APR, 8, 31),  # never counted
-                (None, 1, False, "INFORCE", None, None, 31),  # no surviving lead
+                (1, 1, True, "INFORCE", D_APR, 7, 31, D_APR),  # counted in April (lead month)
+                (2, 1, True, "CANCELLED", D_APR, 7, 32, D_APR),  # counted: it was sold
+                (3, 1, True, "NTU", D_APR, 8, 31, D_APR),  # never counted
+                (None, 1, False, "INFORCE", None, None, 31, None),  # no surviving lead
             ],
             "lead_key long, region_key long, is_lead_attributed boolean, "
             "policy_status string, lead_created_date_key int, channel_key long, "
-            "agent_key long",
+            "agent_key long, policy_start_date_key int",
         ),
         fact_call=(
             [
-                (1, D_APR, True, 100, 20),
-                (1, D_APR, True, 300, 0),
-                (1, D_APR, False, 999, 99),  # not connected: out of both sides
-                (2, D_MAY, True, 50, 10),
+                (1, D_APR, True, 100, 20, 1),
+                (1, D_APR, True, 300, 0, 1),
+                (1, D_APR, False, 999, 99, 1),  # not connected: out of both sides
+                (2, D_MAY, True, 50, 10, 5),
             ],
             "region_key long, call_date_key int, is_connected boolean, "
-            "talk_time_seconds int, hold_time_seconds int",
+            "talk_time_seconds int, hold_time_seconds int, lead_key long",
         ),
         fact_marketing_spend_daily=(
             [(D_APR, 1, 7, Decimal("100")), (D_APR, 2, 8, Decimal("20"))],  # none in May
@@ -229,6 +230,7 @@ REQUIRED = {
     "Cost Per Lead (GBP)": ("core", "3"),
     "Contact Rate": ("stretch", "4"),
     "Lead to Policy Conversion Rate": ("core", "5"),
+    "Connected Call to Policy Conversion Rate": ("core", None),
     "Average Annual Premium (GBP)": ("stretch", "6"),
     "Average Handle Time (Seconds)": ("core", "7"),
     "Grade of Service": ("stretch", "8"),
@@ -270,7 +272,6 @@ def test_every_required_measure_has_its_exact_name_tier_and_a_description():
         assert m["folder"], name
         assert name not in REQUIRED or m["tier"][0] != "helper"
     assert not any(n == "Conversion Rate" for n in measures)
-    assert "Connected Call to Policy Conversion Rate" not in measures  # step 18
     assert "86.8%" in measures["Average Annual Premium (GBP)"]["description"]
     assert {n for n, _ in CORE_MEASURES} == {
         n for n, (t, _) in REQUIRED.items() if t == "core"
@@ -341,6 +342,27 @@ SHARED_LOGIC = {
         [
             "(SUM(c.talk_time_seconds) + SUM(c.hold_time_seconds)) / COUNT(*)",
             "WHERE c.is_connected",
+        ],
+    ),  # fmt: skip
+    "Connected Call to Policy Conversion Rate": (
+        [
+            "DIVIDE ( Policies, ConnectedCalls )",
+            "USERELATIONSHIP ( dim_date[date_key], fact_policy[policy_start_date_key] )",
+            "KEEPFILTERS ( fact_policy[is_lead_attributed] = TRUE () )",
+            'KEEPFILTERS ( fact_policy[policy_status] <> "NTU" )',
+            "KEEPFILTERS ( fact_call[is_connected] = TRUE () )",
+            "fact_lead_funnel[lead_in_business_hours_flag] = TRUE ()",
+            "CROSSFILTER ( dim_date[date_key], fact_lead_funnel[lead_created_date_key], NONE )",
+            "TREATAS ( BusinessHoursLeads, fact_policy[lead_key] )",
+            "TREATAS ( BusinessHoursLeads, fact_call[lead_key] )",
+        ],
+        "expected_connected_call_to_policy_conversion_rate",
+        [
+            "WHERE p.is_lead_attributed AND COALESCE(p.policy_status, '') <> 'NTU'",
+            "d.date_key = p.policy_start_date_key",
+            "d.date_key = c.call_date_key",
+            "WHERE c.is_connected",
+            "AND f.lead_in_business_hours_flag",
         ],
     ),  # fmt: skip
     "Cost Per Policy (GBP)": (

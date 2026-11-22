@@ -131,6 +131,15 @@ pytest
 - **`dim_region` and `dim_product` have no UNKNOWN member** (the brief gives UNKNOWN only
   to channel, campaign and agent). At step 12 fact builds must raise an error if any
   region or product key is unresolved. They must never drop rows or set nulls.
+- **Step 11 choices (confirmed):** `gold.dim_lead_nopii` is a table here (a view in Unity
+  Catalog); `date_of_birth_hash` stays in `dim_lead`; a lead with no consent event keeps
+  its capture flag, labelled `lead_capture`; AU postcode keeps the first 3 digits.
+- **Consent in measures:** any Power BI measure that uses marketing consent filters on
+  `consent_marketing_source`, because `lead_capture` is weaker evidence than a consent
+  event.
+- **Tier 2 agent columns:** `agent_id` and `seniority_band` must be hidden from
+  `Marketing_Analyst_NoPII` and `Regional_Analyst` at step 17 (decide there between
+  object-level security and a separate agent table).
 
 ## Reference implementation (read-only)
 
@@ -190,10 +199,11 @@ governance risks.
 
 ## Where things stand
 
-Steps 1 to 10 done: scaffold; assumptions and defect status; config, UTC session, runner;
+Steps 1 to 11 done: scaffold; assumptions and defect status; config, UTC session, runner;
 bronze (append-only, `_source_row`); DQ framework; silver reference tables; silver leads
 and consent; silver calls (AU converted, defect 17 kept and flagged, defect 26 flagged);
 silver policy and spend (spend minor units rescaled at 100, 180 CAD June rows
 quarantined); gold dimensions with a deterministic SCD2 `dim_agent` (1,139 call leads
-and 615 call agents resolve to UNKNOWN).
-Next: step 11 of `docs/PLAN.md` (PII policy and `gold.dim_lead`).
+and 615 call agents resolve to UNKNOWN); PII policy with `gold.dim_lead` (47,201),
+`gold.dim_lead_nopii` and a gold-wide PII scan in the pipeline.
+Next: step 12 of `docs/PLAN.md` (gold facts and `fact_lead_funnel`).

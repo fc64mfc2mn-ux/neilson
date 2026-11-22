@@ -24,6 +24,9 @@
 
 <!-- fill in -->
 
+Note for drafting: `gold.dim_lead_nopii` is a Delta table in the local build; in Unity
+Catalog it would be a view over `gold.dim_lead` granted to `Marketing_Analyst_NoPII`.
+
 ## Secrets handling
 
 <!-- fill in -->

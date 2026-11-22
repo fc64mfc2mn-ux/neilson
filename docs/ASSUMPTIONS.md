@@ -185,3 +185,10 @@ confirm or overturn. The query and the result will be recorded against the entry
     latest event in `silver.consent_current`; a lead with no event keeps its capture flag,
     labelled `lead_capture`. *Reverse:* `POSTCODE_RULES`, `phone_e164`, `age_band` in
     `src/gold/apply_pii_policy.py`.
+
+26. **Consent labelling.** *Choice:* `gold.dim_lead.consent_marketing_current` takes the
+    latest consent event; with no event, the capture-time flag, and
+    `consent_marketing_source` says which (`consent_events` or `lead_capture`). The AU
+    postcode rule is in assumption 25. *Reason:* the capture flag is the only evidence for
+    leads with no events, but it is weaker (defect 25 shows it can be stale), so measures
+    that use consent filter on the source. *Reverse:* null consent for `lead_capture`.

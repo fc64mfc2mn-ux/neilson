@@ -1,0 +1,50 @@
+measure,slice,slice_value,value
+Marketing Spend (GBP),all,ALL,1612569.680000
+Marketing Spend (GBP),region,AU,391741.520000
+Marketing Spend (GBP),region,CA,270992.340000
+Marketing Spend (GBP),region,UK,625777.120000
+Marketing Spend (GBP),region,US,324058.700000
+Marketing Spend (GBP),month,2026-04,598324.430000
+Marketing Spend (GBP),month,2026-05,613416.360000
+Marketing Spend (GBP),month,2026-06,400828.890000
+Leads (Deduplicated),all,ALL,47201.000000
+Leads (Deduplicated),region,AU,8955.000000
+Leads (Deduplicated),region,CA,11317.000000
+Leads (Deduplicated),region,UK,18902.000000
+Leads (Deduplicated),region,US,8027.000000
+Leads (Deduplicated),month,2026-04,15420.000000
+Leads (Deduplicated),month,2026-05,16330.000000
+Leads (Deduplicated),month,2026-06,15451.000000
+Cost Per Lead (GBP),all,ALL,34.163888
+Cost Per Lead (GBP),region,AU,43.745563
+Cost Per Lead (GBP),region,CA,23.945599
+Cost Per Lead (GBP),region,UK,33.106397
+Cost Per Lead (GBP),region,US,40.371085
+Cost Per Lead (GBP),month,2026-04,38.801844
+Cost Per Lead (GBP),month,2026-05,37.563770
+Cost Per Lead (GBP),month,2026-06,25.941938
+Lead to Policy Conversion Rate,all,ALL,0.095316
+Lead to Policy Conversion Rate,region,AU,0.053043
+Lead to Policy Conversion Rate,region,CA,0.104445
+Lead to Policy Conversion Rate,region,UK,0.102370
+Lead to Policy Conversion Rate,region,US,0.112994
+Lead to Policy Conversion Rate,month,2026-04,0.091569
+Lead to Policy Conversion Rate,month,2026-05,0.099143
+Lead to Policy Conversion Rate,month,2026-06,0.095010
+Average Handle Time (Seconds),all,ALL,517.556781
+Average Handle Time (Seconds),region,AU,469.591284
+Average Handle Time (Seconds),region,CA,550.223432
+Average Handle Time (Seconds),region,UK,515.564405
+Average Handle Time (Seconds),region,US,537.337068
+Average Handle Time (Seconds),month,2026-04,513.001412
+Average Handle Time (Seconds),month,2026-05,517.932271
+Average Handle Time (Seconds),month,2026-06,520.097161
+Average Handle Time (Seconds),month,2026-07,532.200385
+Time to First Call (Median Minutes),all,ALL,38.550000
+Time to First Call (Median Minutes),region,AU,511.730000
+Time to First Call (Median Minutes),region,CA,44.780000
+Time to First Call (Median Minutes),region,UK,22.370000
+Time to First Call (Median Minutes),region,US,40.250000
+Time to First Call (Median Minutes),month,2026-04,38.470000
+Time to First Call (Median Minutes),month,2026-05,38.380000
+Time to First Call (Median Minutes),month,2026-06,38.790000

@@ -137,9 +137,9 @@ pytest
 - **Consent in measures:** any Power BI measure that uses marketing consent filters on
   `consent_marketing_source`, because `lead_capture` is weaker evidence than a consent
   event.
-- **Tier 2 agent columns:** `agent_id` and `seniority_band` must be hidden from
-  `Marketing_Analyst_NoPII` and `Regional_Analyst` at step 17 (decide there between
-  object-level security and a separate agent table).
+- **Tier 2 agent columns:** `agent_id` stays visible (it is an operational key, not
+  sensitive). Only `seniority_band` / `dim_agent_seniority` is restricted, and the small-group
+  risk is handled by the `Agents in Group >= 3` visual filter.
 - **Seniority table (step 16b):** `gold.dim_agent_seniority` (`agent_key`,
   `seniority_band`, tier 2) is the separate table for the agent-seniority visual, so OLS
   can hide it whole; `agent_id` stays in `dim_agent`. The model removes `seniority_band`
@@ -221,10 +221,10 @@ Steps 1 to 15 done (see `git log`): scaffold, config and runner, bronze, DQ fram
 silver, gold dimensions (SCD2 `dim_agent`), PII policy, facts, bridges and
 `fact_lead_funnel` (47,201), the six named tests and DQ gate (602 error lines) in CI, the
 legacy port with its parity test, and the CSV export to `export/powerbi/`.
-Step 16 is prepared, not built: `powerbi/measures.dax` (all twelve measures),
-`powerbi/MODEL_DESIGN.md` (tables, relationships, the four visuals, the VM checklist) and
-`powerbi/expected_values.csv` from `python -m src.powerbi_expected --config
-config/config.yaml`, checked by `tests/test_powerbi_model.py`.
-Next: the human builds the model in Power BI Desktop on the VM and compares the values
-with `expected_values.csv`. Step 17 is RLS (`Regional_Analyst`), the four visuals and the
-view-as evidence. Step 18 is the Connected Call measure and the reconciliation.
+Step 16 done: `powerbi/northgate_funnel.pbix` (star schema, 'Key Measures' table, marked
+date table), measure values checked against `powerbi/expected_values.csv` (screenshots in
+`powerbi/`).
+Step 17 done: `Regional_Analyst` RLS on `USERPRINCIPALNAME()` against
+`bridge_user_region`, View as evidence for `anz.manager` (AU+US), `uk.analyst` (UK) and an
+unmapped user (zero rows); see `powerbi/MODEL_DESIGN.md`.
+Next: step 18, the Connected Call measure and the reconciliation view.

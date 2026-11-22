@@ -3,8 +3,8 @@
 The semantic model on the gold export, for building by hand in Power BI Desktop on the
 Windows VM. Measures: `powerbi/measures.dax`. Values to check against:
 `powerbi/expected_values.csv` (from `python -m src.powerbi_expected --config
-config/config.yaml`). Not in this step: RLS and `bridge_user_region` (step 17), the
-Connected Call measure (step 18).
+config/config.yaml`). RLS and `bridge_user_region` are added in step 17 (last section); the
+Connected Call measure is step 18.
 
 ## Tables
 
@@ -26,7 +26,7 @@ Row counts are asserted in `tests/test_gold_facts.py` and `tests/test_gold_dimen
 | `fact_call` | Yes | `source_file` | keys, `call_id`, `lead_match_status` |
 | `fact_marketing_spend_daily` | Yes | none | keys, `spend_local`, `rate_to_gbp` (local currencies do not add up) |
 | `Target CPL` | DAX table (below) | n/a | none |
-| `Measures` | Empty table for the measures | n/a | its placeholder column |
+| `Key Measures` | Empty table for the measures | n/a | its placeholder column |
 
 Not imported: `dim_lead` (hashes and health flags stay out of the model), `fact_lead`
 (`fact_lead_funnel` has the same grain and keys), `bridge_lead_call` (the funnel already
@@ -196,15 +196,38 @@ names the axis). Leave out blank and `Unknown` categories unless stated.
 6. In Model view, delete any automatic relationships and create the table above. Set the
    policy-start and first-call relationships to inactive.
 7. Mark the date table, and set the sort-by columns.
-8. Create the `Target CPL` table and the `Measures` table (Enter data, one placeholder
+8. Create the `Target CPL` table and the `Key Measures` table (Enter data, one placeholder
    column).
-9. Paste `measures.dax` into DAX query view, run it, and add each measure to `Measures`.
+9. Paste `measures.dax` into DAX query view, run it, and add each measure to `Key Measures`.
    Set each description, display folder and format from its comment block. Build the
    helper measures first.
-10. Hide the keys and columns listed. Hide the placeholder column in `Measures`.
+10. Hide the keys and columns listed. Hide the placeholder column in `Key Measures`.
 11. Run the three `EVALUATE` queries at the end of `measures.dax`. Compare them with
     `expected_values.csv` (rates are fractions: 0.095316 is 9.53%). Screenshot the result
     into `powerbi/`.
 12. Build the four visuals below on one page. Compare each with its
     `expected_values.csv` rows.
 13. Save as `powerbi/northgate_funnel.pbix`, and copy it back to the repo on the Mac.
+
+## Row-level security (step 17)
+
+**Load `bridge_user_region`:** Get data -> Text/CSV on `export/powerbi/bridge_user_region.csv`.
+Columns: `user_principal_name`, `role_name`, `region_code`, `region_key`,
+`all_regions_flag`. Hide the table from report view. It has no relationships: the role
+filter reads it with DAX.
+
+**Role `Regional_Analyst`**, filter on `dim_region`: the user's mapped `region_key`
+values from the bridge, matched on `USERPRINCIPALNAME()`. A user whose row has
+`all_regions_flag` true sees every region; an unmapped user sees no rows. The facts are
+filtered through the `dim_region` relationships.
+
+**Tested with View as** (screenshots in `powerbi/`):
+
+| User | Expected | Evidence |
+|---|---|---|
+| `anz.manager@` | AU and US | `rls_view_as_anz_manager.png` |
+| `uk.analyst@` | UK only | `rls_view_as_uk_analyst.png` |
+| `nobody@` (unmapped) | zero rows | `rls_view_as_unmapped.png`, `rls_view_as_no_user.png` |
+
+`rls_view_not_active_all_data.png` shows the same page with no role active (all data), and
+`rls_role_definition.png` the role's DAX filter.

@@ -3,7 +3,7 @@
 //
 // How to use: paste this whole file into Power BI Desktop's DAX query view and run it.
 // Each MEASURE line offers "Update model: Add new measure"; add them all to the
-// 'Measures' table. Then set each measure's Description, Display folder and Format
+// 'Key Measures' table. Then set each measure's Description, Display folder and Format
 // from the comment block above it. The EVALUATE queries at the end print the values to
 // compare with powerbi/expected_values.csv (same slices: all, by region, by month).
 //
@@ -11,7 +11,7 @@
 //   // ==== [core N | stretch N | stretch | helper] <measure name>
 //   // Description: <text, continued on lines starting "//   ">
 //   // Folder: <display folder> | Format: <format string>
-//   MEASURE 'Measures'[<measure name>] = <DAX>
+//   MEASURE 'Key Measures'[<measure name>] = <DAX>
 //
 // Core scope (brief): measures 1, 2, 3, 5, 7, 9. Stretch: 4, 6, 8, 10, MoM %, target
 // variance. Helpers are not in the brief; core measures use them, so build them first.
@@ -27,7 +27,7 @@ DEFINE
     //   (not taken up). Cancelled and lapsed policies count: they were sold. Policies
     //   with no surviving lead are excluded. Filtered by the lead-created date.
     // Folder: 2. Funnel | Format: #,0
-    MEASURE 'Measures'[Policies Linked to Surviving Leads] =
+    MEASURE 'Key Measures'[Policies Linked to Surviving Leads] =
         CALCULATE (
             COUNTROWS ( fact_policy ),
             KEEPFILTERS ( fact_policy[is_lead_attributed] = TRUE () ),
@@ -39,7 +39,7 @@ DEFINE
     //   the lakehouse. Excludes quarantined rows (exact copies, negatives, and CAD June
     //   spend, which has no rate). Filtered by the spend date.
     // Folder: 1. Spend and leads | Format: \£#,0.00
-    MEASURE 'Measures'[Marketing Spend (GBP)] =
+    MEASURE 'Key Measures'[Marketing Spend (GBP)] =
         SUM ( fact_marketing_spend_daily[spend_gbp] )
 
     // ==== [core 2] Leads (Deduplicated)
@@ -47,21 +47,21 @@ DEFINE
     //   email or phone within 48 hours; the earliest survives). Filtered by the
     //   lead-created date.
     // Folder: 1. Spend and leads | Format: #,0
-    MEASURE 'Measures'[Leads (Deduplicated)] =
+    MEASURE 'Key Measures'[Leads (Deduplicated)] =
         DISTINCTCOUNT ( fact_lead_funnel[lead_key] )
 
     // ==== [core 3] Cost Per Lead (GBP)
     // Description: Marketing Spend (GBP) divided by Leads (Deduplicated). Blank when
     //   there are no leads or no spend.
     // Folder: 1. Spend and leads | Format: \£#,0.00
-    MEASURE 'Measures'[Cost Per Lead (GBP)] =
+    MEASURE 'Key Measures'[Cost Per Lead (GBP)] =
         DIVIDE ( [Marketing Spend (GBP)], [Leads (Deduplicated)] )
 
     // ==== [stretch 4] Contact Rate
     // Description: Surviving leads with at least one connected call (CONNECTED, QUOTED,
     //   APPLICATION_STARTED or SOLD), divided by Leads (Deduplicated).
     // Folder: 2. Funnel | Format: 0.0%
-    MEASURE 'Measures'[Contact Rate] =
+    MEASURE 'Key Measures'[Contact Rate] =
         DIVIDE (
             CALCULATE (
                 [Leads (Deduplicated)],
@@ -76,7 +76,7 @@ DEFINE
     //   first-touch campaign. Counts policies, not converted leads. Not the call-grain
     //   Connected Call to Policy Conversion Rate.
     // Folder: 2. Funnel | Format: 0.00%
-    MEASURE 'Measures'[Lead to Policy Conversion Rate] =
+    MEASURE 'Key Measures'[Lead to Policy Conversion Rate] =
         DIVIDE ( [Policies Linked to Surviving Leads], [Leads (Deduplicated)] )
 
     // ==== [stretch 6] Average Annual Premium (GBP)
@@ -85,7 +85,7 @@ DEFINE
     //   policies (4,240 of 4,884) have a GBP premium; the rest lack an FX rate (CAD June,
     //   July). See Average Annual Premium (GBP) Coverage % for the current selection.
     // Folder: 4. Policy | Format: \£#,0.00
-    MEASURE 'Measures'[Average Annual Premium (GBP)] =
+    MEASURE 'Key Measures'[Average Annual Premium (GBP)] =
         CALCULATE (
             DIVIDE (
                 SUM ( fact_policy[annual_premium_gbp] ),
@@ -99,7 +99,7 @@ DEFINE
     // Description: Share of the policies Average Annual Premium (GBP) counts (excluding
     //   NTU, by policy-start date) that have a GBP premium.
     // Folder: 4. Policy | Format: 0.0%
-    MEASURE 'Measures'[Average Annual Premium (GBP) Coverage %] =
+    MEASURE 'Key Measures'[Average Annual Premium (GBP) Coverage %] =
         CALCULATE (
             DIVIDE (
                 COUNT ( fact_policy[annual_premium_gbp] ),
@@ -114,7 +114,7 @@ DEFINE
     //   APPLICATION_STARTED, SOLD), divided by the connected call count. Talk time on
     //   calls that did not connect is excluded. Filtered by the call date.
     // Folder: 3. Calls | Format: #,0
-    MEASURE 'Measures'[Average Handle Time (Seconds)] =
+    MEASURE 'Key Measures'[Average Handle Time (Seconds)] =
         CALCULATE (
             DIVIDE (
                 SUM ( fact_call[talk_time_seconds] ) + SUM ( fact_call[hold_time_seconds] ),
@@ -128,7 +128,7 @@ DEFINE
     //   offered. The SLA is each region's own target (gos_target_seconds), applied in
     //   the lakehouse. Filtered by the call date.
     // Folder: 3. Calls | Format: 0.0%
-    MEASURE 'Measures'[Grade of Service] =
+    MEASURE 'Key Measures'[Grade of Service] =
         DIVIDE (
             CALCULATE (
                 COUNTROWS ( fact_call ),
@@ -146,7 +146,7 @@ DEFINE
     //   per surviving lead; leads never called are excluded. AU call times are converted
     //   from Australia/Sydney; an unexplained AU gap remains (flagged, not corrected).
     // Folder: 2. Funnel | Format: #,0.0
-    MEASURE 'Measures'[Time to First Call (Median Minutes)] =
+    MEASURE 'Key Measures'[Time to First Call (Median Minutes)] =
         MEDIAN ( fact_lead_funnel[minutes_to_first_call] )
 
     // ==== [stretch 10] Cost Per Policy (GBP)
@@ -154,7 +154,7 @@ DEFINE
     //   (excluding NTU). Spend by spend date, policies by lead-created date. The
     //   channel attribution window is not applied (assumption 10).
     // Folder: 2. Funnel | Format: \£#,0.00
-    MEASURE 'Measures'[Cost Per Policy (GBP)] =
+    MEASURE 'Key Measures'[Cost Per Policy (GBP)] =
         DIVIDE ( [Marketing Spend (GBP)], [Policies Linked to Surviving Leads] )
 
     // ==== [stretch] Cost Per Lead (GBP) MoM %
@@ -162,7 +162,7 @@ DEFINE
     //   table. Blank unless one month is selected, and blank for the first month in the
     //   data (no previous month) or a month with no cost per lead.
     // Folder: 1. Spend and leads | Format: +0.0%;-0.0%;0.0%
-    MEASURE 'Measures'[Cost Per Lead (GBP) MoM %] =
+    MEASURE 'Key Measures'[Cost Per Lead (GBP) MoM %] =
         VAR CurrentCpl = [Cost Per Lead (GBP)]
         VAR PreviousCpl =
             CALCULATE ( [Cost Per Lead (GBP)], DATEADD ( dim_date[date], -1, MONTH ) )
@@ -179,7 +179,7 @@ DEFINE
     //   table (GBP 20 to 120, steps of 5). Positive means over target. Blank when no
     //   single target is selected or there is no cost per lead.
     // Folder: 1. Spend and leads | Format: +\£#,0.00;-\£#,0.00;\£0.00
-    MEASURE 'Measures'[CPL vs Target Variance (GBP)] =
+    MEASURE 'Key Measures'[CPL vs Target Variance (GBP)] =
         VAR TargetCpl = SELECTEDVALUE ( 'Target CPL'[Target CPL (GBP)] )
         VAR Cpl = [Cost Per Lead (GBP)]
         RETURN
@@ -191,7 +191,7 @@ DEFINE
     //   Agents in Group >= 3, so a band backed by one or two people (tier 2 HR
     //   performance data) is hidden. It adds no second conversion measure.
     // Folder: 9. Visual helpers | Format: #,0
-    MEASURE 'Measures'[Agents in Group] =
+    MEASURE 'Key Measures'[Agents in Group] =
         // dim_agent and dim_agent_seniority are not related: the fact_call table filter
         // carries the seniority (and region, RLS) filter to dim_agent through the calls.
         CALCULATE ( DISTINCTCOUNT ( dim_agent[agent_id] ), fact_call )

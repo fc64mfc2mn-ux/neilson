@@ -112,6 +112,25 @@ def to_gbp(spend: DataFrame, fx: DataFrame) -> DataFrame:
     return joined.withColumn("spend_gbp", gbp.cast("decimal(14,2)"))
 
 
+def split_missing_rate(spend: DataFrame) -> tuple[DataFrame, DataFrame]:
+    """(rows with a rate, rows without): the second set is quarantined, never kept null."""
+    has_rate = F.col("rate_to_gbp").isNotNull()
+    return spend.where(has_rate), spend.where(~has_rate)
+
+
+def rescale_minor_units(spend: DataFrame, divisor: int) -> DataFrame:
+    """Divide rows classified `rescale` by `divisor`; keep `spend_local_raw` and a flag."""
+    rescale = F.col("minor_unit_action") == "rescale"
+    return (
+        spend.withColumn("minor_unit_rescaled", F.coalesce(rescale, F.lit(False)))
+        .withColumn("spend_local_raw", F.col("spend_local").cast("decimal(14,2)"))
+        .withColumn(
+            "spend_local",
+            F.when(rescale, F.col("spend_local") / divisor).otherwise(F.col("spend_local")),
+        )
+    )
+
+
 def outside_campaign_dates(spend: DataFrame, campaigns: DataFrame) -> DataFrame:
     """Spend dated before its campaign's start or after its end, with `detail`."""
     dates = campaigns.select("campaign_id", F.col("start_date").alias("_start"),
@@ -170,14 +189,14 @@ def build_spend(spark: SparkSession, config: dict) -> SpendReconciliation:
     key = ["spend_date", "campaign_id"]
 
     # 2. Missing FX rate.
-    no_rate = spend.where(F.col("rate_to_gbp").isNull()).withColumn(
+    spend, no_rate = split_missing_rate(spend)
+    no_rate = no_rate.withColumn(
         "detail", F.concat_ws(" ", "currency_code", F.date_format("spend_date", "yyyy-MM"))
     )
     removed["spend_fx_rate_missing"] = write_dq_exception(
         no_rate, "spend_fx_rate_missing", SPEND_SOURCE, key, "error", config=config,
         detail_col="detail",
     )  # fmt: skip
-    spend = spend.where(F.col("rate_to_gbp").isNotNull())
 
     # 3. Negative spend.
     negative = spend.where(F.col("spend_local") < 0).withColumn(
@@ -203,15 +222,7 @@ def build_spend(spark: SparkSession, config: dict) -> SpendReconciliation:
     write_dq_exception(spend.where(rescale), "spend_minor_units_rescaled", SPEND_SOURCE, key,
                        "warning", config=config, action="corrected",
                        detail_col="detail")  # fmt: skip
-    spend = (
-        spend.withColumn("minor_unit_rescaled", F.coalesce(rescale, F.lit(False)))
-        .withColumn("spend_local_raw", F.col("spend_local").cast("decimal(14,2)"))
-        .withColumn(
-            "spend_local",
-            F.when(rescale, F.col("spend_local") / rule["divisor"]).otherwise(F.col("spend_local")),
-        )
-        .drop("rate_to_gbp", "spend_gbp", "detail")
-    )
+    spend = rescale_minor_units(spend, rule["divisor"]).drop("rate_to_gbp", "spend_gbp", "detail")
 
     # 5. Flags that keep the row.
     zero_paid = spend.where(

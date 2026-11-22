@@ -99,6 +99,7 @@ CHECK_DEFECTS: dict[str, int] = {
     "spend_clicks_exceed_impressions": 28,
     "lead_postcode_region_mismatch": 29,
     "lead_phone_unparseable": 29,
+    "policy_fx_rate_missing": 12,
 }
 
 

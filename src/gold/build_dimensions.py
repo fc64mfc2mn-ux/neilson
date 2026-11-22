@@ -242,13 +242,13 @@ def dim_agent(agent: DataFrame) -> DataFrame:
     )
 
 
-def resolve_agent(calls: DataFrame, dim: DataFrame) -> DataFrame:
-    """Add `agent_key`: the version valid on the call's date, else UNKNOWN (-1)."""
+def resolve_agent(calls: DataFrame, dim: DataFrame, day: Column | None = None) -> DataFrame:
+    """Add `agent_key`: the version valid on `day` (default: the call's UTC date), else -1."""
     versions = dim.select(
         F.col("agent_id").alias("_aid"), F.col("agent_key").alias("_akey"),
         F.col("valid_from").alias("_from"), F.col("valid_to").alias("_to"),
     )  # fmt: skip
-    day = F.to_date("call_start_ts_utc")
+    day = F.to_date("call_start_ts_utc") if day is None else day
     joined = calls.join(
         versions,
         (F.col("agent_id") == F.col("_aid")) & day.between(F.col("_from"), F.col("_to")),

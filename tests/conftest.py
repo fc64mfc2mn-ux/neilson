@@ -91,3 +91,32 @@ def real_leads(spark, real_reference):
 
     config, _ = real_reference
     return config, build_leads(spark, config), build_consent(spark, config)
+
+
+@pytest.fixture(scope="session")
+def real_gold_all(spark, real_leads, tmp_path_factory):
+    """Every silver table, then all of gold (dimensions, dim_lead, facts, funnel, bridges),
+    built once on the real data with a test-only salt. Returns (config, results by stage)."""
+    import json
+
+    from src.gold.apply_pii_policy import build_dim_lead, scan_gold_for_pii
+    from src.gold.build_dimensions import build_dimensions
+    from src.gold.build_facts import build_facts
+    from src.gold.build_lead_funnel import build_lead_funnel
+    from src.silver.calls import build_calls
+    from src.silver.policy import build_policy
+    from src.silver.spend import build_spend
+
+    secrets = tmp_path_factory.mktemp("secrets") / "secrets.json"
+    secrets.write_text(json.dumps({"pii_hash_salt": "real-data-test-salt-9c8b"}))
+    config, _, _ = real_leads
+    config = {**config, "run_id": "test-gold-all", "secrets_file": str(secrets)}
+    build_calls(spark, config)
+    build_policy(spark, config)
+    build_spend(spark, config)
+    results = {"dimensions": build_dimensions(spark, config)}
+    results["dim_lead"] = build_dim_lead(spark, config)
+    results["facts"] = build_facts(spark, config)
+    results["funnel"] = build_lead_funnel(spark, config)
+    results["pii_scan"] = scan_gold_for_pii(spark, config)
+    return config, results

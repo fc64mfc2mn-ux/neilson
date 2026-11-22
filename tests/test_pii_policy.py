@@ -7,7 +7,6 @@ and scan every gold column for raw identifiers taken from silver and bronze.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import re
 from datetime import date
@@ -309,26 +308,25 @@ def test_leak_scan_exempts_calendar_labels_from_name_checks_only(spark):
     assert reasons == {"raw email", "email pattern"}
 
 
+def test_rls_user_names_are_exempt_from_the_email_pattern_only(spark):
+    raw = spark.createDataFrame([("ann.lee@mail.example", "email")], "value string, kind string")
+    users = spark.createDataFrame(
+        [("uk.analyst@northgatelife.example",)], "user_principal_name string"
+    )
+    assert pii_leaks({"gold.bridge_user_region": users}, raw).count() == 0
+    leaked = spark.createDataFrame([("ann.lee@mail.example",)], "user_principal_name string")
+    reasons = {r.reason for r in pii_leaks({"gold.bridge_user_region": leaked}, raw).collect()}
+    assert reasons == {"raw email"}  # the raw customer email is still caught
+
+
 # ------------------------------------------------------------------ real data
 
 
 @pytest.fixture(scope="module")
-def real_dim_lead(spark, real_leads, tmp_path_factory):
-    """All silver, the step 10 dimensions and dim_lead, with a test-only salt."""
-    from src.gold.build_dimensions import build_dimensions
-    from src.silver.calls import build_calls
-    from src.silver.policy import build_policy
-    from src.silver.spend import build_spend
-
-    secrets = tmp_path_factory.mktemp("secrets") / "secrets.json"
-    secrets.write_text(json.dumps({"pii_hash_salt": "real-data-test-salt-9c8b"}))
-    config, _, _ = real_leads
-    config = {**config, "run_id": "test-dim-lead", "secrets_file": str(secrets)}
-    build_calls(spark, config)
-    build_policy(spark, config)
-    build_spend(spark, config)
-    build_dimensions(spark, config)
-    return config, build_dim_lead(spark, config)
+def real_dim_lead(real_gold_all):
+    """All of gold built once (conftest), with a test-only salt."""
+    config, results = real_gold_all
+    return config, results["dim_lead"]
 
 
 @pytest.mark.slow
@@ -429,3 +427,15 @@ def test_classification_covers_every_gold_column(spark, real_dim_lead):
     assert {k for k, tier in doc.items() if tier == 3} == {
         ("gold.dim_lead", "smoker_flag"), ("gold.dim_lead", "health_condition_flag"),
     }  # fmt: skip
+
+
+def test_the_scan_covers_every_gold_table_in_the_brief():
+    from src.gold.apply_pii_policy import GOLD_TABLES
+
+    brief = {
+        "gold.dim_date", "gold.dim_region", "gold.dim_channel", "gold.dim_campaign",
+        "gold.dim_agent", "gold.dim_product", "gold.dim_lead", "gold.fact_marketing_spend_daily",
+        "gold.fact_lead", "gold.fact_call", "gold.fact_policy", "gold.fact_lead_funnel",
+        "gold.bridge_lead_call", "gold.bridge_user_region",
+    }  # fmt: skip
+    assert set(GOLD_TABLES) == brief | {"gold.dim_lead_nopii"}

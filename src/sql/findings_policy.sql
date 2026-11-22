@@ -152,3 +152,17 @@ FROM silver.policy
 WHERE NOT annual_premium_derived AND annual_premium_local > monthly_premium_local * 12.01
 GROUP BY region_code, payment_frequency
 ORDER BY region_code, payment_frequency;
+
+-- name: policy_gbp_rate_missing
+-- Step 12 (assumption 27): policies whose currency has no Treasury rate for the
+-- application month, by currency and month. Asserted in tests/test_gold_facts.py.
+SELECT p.currency_code,
+       DATE_FORMAT(p.application_date, 'yyyy-MM') AS application_month,
+       COUNT(*) AS policies
+FROM silver.policy p
+LEFT JOIN silver.fx_rate f
+  ON f.currency_code = p.currency_code
+ AND f.rate_month = DATE_FORMAT(p.application_date, 'yyyy-MM')
+WHERE f.rate_to_gbp IS NULL
+GROUP BY p.currency_code, DATE_FORMAT(p.application_date, 'yyyy-MM')
+ORDER BY p.currency_code, application_month;

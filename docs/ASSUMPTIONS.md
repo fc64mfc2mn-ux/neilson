@@ -68,6 +68,8 @@ confirm or overturn. The query and the result will be recorded against the entry
    and end exclusive, in the region's own timezone. No holiday calendar. *Reason:* the Ops
    note names overnight and weekend; the pack has no holiday data. *Reverse:* change the
    flag logic or add a holiday table.
+   Applied at step 12 as `lead_in_business_hours_flag` (`fact_lead`, `fact_lead_funnel`);
+   the weekend and holiday rule is open question c.
 
 10. **Attribution window (pending evidence).** *Ambiguity:* `ref_channel` gives
     `attribution_window_days` (0 to 30) but nothing says whether it limits which policies
@@ -145,8 +147,10 @@ confirm or overturn. The query and the result will be recorded against the entry
 
 20. **Calls on unknown leads (defect 17).** *Ambiguity:* 1,100 calls name a lead id found
     in no lead file. *Options:* quarantine; keep against an `UNKNOWN` lead. *Choice:*
-    keep, flag `call_lead_not_found`, map to `UNKNOWN` in gold; the same for 45 calls
-    on leads quarantined at step 7, and for AG9001 to AG9004 (`UNKNOWN` agent).
+    keep and flag `call_lead_not_found`; the same for 45 calls on leads quarantined at step
+    7. In gold (step 12) they keep a null `lead_key` with `lead_match_status`
+    (`lead_not_found`, `lead_quarantined`), not an `UNKNOWN` lead: `dim_lead` is one row per
+    real lead (as assumption 11). AG9001 to AG9004 map to the `UNKNOWN` agent.
     *Reason:* all 1,099 ids follow `LD-GHOST-<region>-<n>`, none matches a quarantined,
     PK-conflict or out-of-period lead, and no policy links to them. The calls are real
     agent work for handle time and grade of service; they cannot enter the lead-grain
@@ -192,3 +196,17 @@ confirm or overturn. The query and the result will be recorded against the entry
     postcode rule is in assumption 25. *Reason:* the capture flag is the only evidence for
     leads with no events, but it is weaker (defect 25 shows it can be stale), so measures
     that use consent filter on the source. *Reverse:* null consent for `lead_capture`.
+
+27. **Policy premium in GBP.** *Ambiguity:* which month's rate. *Choice:* the application
+    month (the sale event; spend also uses its own activity month). No rate is invented:
+    CAD has no June rate and no currency has July, so 675 policies (517 CAD June, 158 July)
+    keep a null `annual_premium_gbp`, flagged `gbp_rate_missing` and in `dq_exception`
+    (`policy_fx_rate_missing`, warning). *Reverse:* load the rates and rerun, or switch
+    to the policy start month in `policy_gbp` (`src/gold/build_facts.py`).
+
+28. **Funnel definitions (step 12).** First-touch campaign: the surviving lead is the
+    earliest in its cluster, so its campaign. `last_call_agent_key`: the last call on or
+    before the application date, else the last call. Never called: null call keys and
+    timings, zero counts, SLA flag false. `quoted_flag` and `application_flag` also count
+    a linked policy. `days_lead_to_policy` runs to the application date. *Reverse:*
+    `lead_funnel` in `src/gold/build_lead_funnel.py`.

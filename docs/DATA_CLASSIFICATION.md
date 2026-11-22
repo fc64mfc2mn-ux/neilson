@@ -8,11 +8,10 @@ outward postcode) are tier 1 by design: that is what the PII policy is for.
 
 `tests/test_pii_policy.py::test_classification_covers_every_gold_column` checks this table
 against the built gold schemas: every column listed once, nothing missing, no extra rows.
-Step 12 adds the facts and bridges.
 
 Not in gold at all (stay in silver): lead `first_name`, `last_name`, `email`, `phone`,
 `postcode`, `date_of_birth`, `consent_timestamp_utc`, `consent_source`; call `call_notes`
-and `recording_url` (tier 3); agent `agent_name`, `agent_email`, `manager_name`,
+and `recording_url` (tier 3); policy `underwriting_decision` (tier 3); agent `agent_name`, `agent_email`, `manager_name`,
 `hire_date`, `fte`.
 
 | Table | Column | Tier | Treatment |
@@ -110,3 +109,103 @@ and `recording_url` (tier 3); agent `agent_name`, `agent_email`, `manager_name`,
 | `gold.dim_lead_nopii` | `postcode_outward` | 1 | As `dim_lead` |
 | `gold.dim_lead_nopii` | `is_orphan_campaign` | 1 | Kept |
 | `gold.dim_lead_nopii` | `dedup_cluster_size` | 1 | Kept |
+| `gold.fact_lead` | `lead_key` | 1 | Joins to `dim_lead` |
+| `gold.fact_lead` | `lead_created_date_key` | 1 | Kept |
+| `gold.fact_lead` | `lead_created_ts_utc` | 1 | Kept |
+| `gold.fact_lead` | `campaign_key` | 1 | UNKNOWN (-1) for orphan campaigns (defect 5) |
+| `gold.fact_lead` | `channel_key` | 1 | Campaign channel (assumption 4); UNKNOWN if unresolved |
+| `gold.fact_lead` | `region_key` | 1 | Strict: every row resolves |
+| `gold.fact_lead` | `product_key` | 1 | Strict: every row resolves |
+| `gold.fact_lead` | `lead_in_business_hours_flag` | 1 | Weekdays, regional hours, own timezone (assumption 9) |
+| `gold.fact_lead` | `is_orphan_campaign` | 1 | Kept (defect 5) |
+| `gold.fact_call` | `call_key` | 1 | Surrogate key (52-bit hash of `call_id`) |
+| `gold.fact_call` | `call_id` | 1 | Kept: dialler reference, no personal data |
+| `gold.fact_call` | `lead_key` | 1 | Null when the lead is not a surviving lead (assumption 20) |
+| `gold.fact_call` | `lead_match_status` | 1 | `matched`, `lead_not_found` or `lead_quarantined` |
+| `gold.fact_call` | `agent_key` | 1 | Version valid on the call date; UNKNOWN for AG9001 to AG9004 |
+| `gold.fact_call` | `region_key` | 1 | Strict |
+| `gold.fact_call` | `call_date_key` | 1 | Kept |
+| `gold.fact_call` | `call_start_ts_utc` | 1 | Kept (UTC; AU converted from Sydney time) |
+| `gold.fact_call` | `call_end_ts_utc` | 1 | Kept |
+| `gold.fact_call` | `duration_seconds` | 1 | Kept (seconds throughout) |
+| `gold.fact_call` | `talk_time_seconds` | 1 | Kept |
+| `gold.fact_call` | `hold_time_seconds` | 1 | Kept |
+| `gold.fact_call` | `queue_wait_seconds` | 1 | Kept |
+| `gold.fact_call` | `call_direction` | 1 | Kept |
+| `gold.fact_call` | `disposition` | 1 | Kept |
+| `gold.fact_call` | `wrap_up_code` | 1 | Kept |
+| `gold.fact_call` | `attempt_number` | 1 | Kept |
+| `gold.fact_call` | `answered_within_sla_flag` | 1 | Kept |
+| `gold.fact_call` | `is_connected` | 1 | CONNECTED, QUOTED, APPLICATION_STARTED, SOLD (assumption 2) |
+| `gold.fact_call` | `qa_score` | 2 | Employee performance (brief); Ops roles only |
+| `gold.fact_call` | `compliance_fail_flag` | 2 | Employee performance (brief); Ops roles only |
+| `gold.fact_call` | `after_do_not_call` | 1 | Kept (defect 26) |
+| `gold.fact_call` | `residual_offset_flag` | 1 | Kept (defect 15) |
+| `gold.fact_call` | `source_file` | 1 | Lineage |
+| `gold.fact_policy` | `policy_key` | 1 | Surrogate key (52-bit hash of `policy_id`) |
+| `gold.fact_policy` | `policy_id` | 1 | Kept: policy reference |
+| `gold.fact_policy` | `lead_key` | 1 | Null when no surviving lead (assumption 11) |
+| `gold.fact_policy` | `lead_match_status` | 1 | `matched`, `no_lead` or `lead_quarantined` |
+| `gold.fact_policy` | `is_lead_attributed` | 1 | True when `lead_key` is set |
+| `gold.fact_policy` | `call_key` | 1 | Null when the call is not in `silver.call` |
+| `gold.fact_policy` | `call_id` | 1 | Kept as supplied |
+| `gold.fact_policy` | `agent_key` | 1 | Version valid on the application date |
+| `gold.fact_policy` | `region_key` | 1 | Strict |
+| `gold.fact_policy` | `product_key` | 1 | Strict |
+| `gold.fact_policy` | `application_date_key` | 1 | Kept |
+| `gold.fact_policy` | `application_date` | 1 | Kept |
+| `gold.fact_policy` | `policy_start_date_key` | 1 | Kept |
+| `gold.fact_policy` | `cancellation_date_key` | 1 | Kept |
+| `gold.fact_policy` | `policy_status` | 1 | Kept |
+| `gold.fact_policy` | `counts_as_sale` | 1 | Status other than NTU (assumption 3) |
+| `gold.fact_policy` | `payment_frequency` | 1 | Kept |
+| `gold.fact_policy` | `currency_code` | 1 | Kept |
+| `gold.fact_policy` | `annual_premium_local` | 2 | Financial data tied to an individual (brief) |
+| `gold.fact_policy` | `monthly_premium_local` | 2 | Financial data tied to an individual (brief) |
+| `gold.fact_policy` | `sum_assured_local` | 2 | Financial data tied to an individual (brief) |
+| `gold.fact_policy` | `rate_to_gbp` | 1 | Application month; null when Treasury has no rate |
+| `gold.fact_policy` | `annual_premium_gbp` | 2 | Null when no rate (assumption 7, defect 12) |
+| `gold.fact_policy` | `gbp_rate_missing` | 1 | Flag |
+| `gold.fact_policy` | `annual_premium_derived` | 1 | Kept (defect 21) |
+| `gold.fact_marketing_spend_daily` | `date_key` | 0 | Campaign-day aggregate |
+| `gold.fact_marketing_spend_daily` | `campaign_key` | 0 | Campaign-day aggregate |
+| `gold.fact_marketing_spend_daily` | `channel_key` | 0 | Campaign-day aggregate |
+| `gold.fact_marketing_spend_daily` | `region_key` | 0 | Campaign-day aggregate |
+| `gold.fact_marketing_spend_daily` | `currency_code` | 0 | Campaign-day aggregate |
+| `gold.fact_marketing_spend_daily` | `spend_local` | 0 | Minor units rescaled (defect 11) |
+| `gold.fact_marketing_spend_daily` | `rate_to_gbp` | 0 | Spend month rate |
+| `gold.fact_marketing_spend_daily` | `spend_gbp` | 0 | Reconciles to silver exactly |
+| `gold.fact_marketing_spend_daily` | `impressions` | 0 | Campaign-day aggregate |
+| `gold.fact_marketing_spend_daily` | `clicks` | 0 | Campaign-day aggregate |
+| `gold.fact_marketing_spend_daily` | `minor_unit_rescaled` | 0 | Flag (defect 11) |
+| `gold.fact_marketing_spend_daily` | `outside_campaign_dates` | 0 | Flag (defect 9) |
+| `gold.fact_lead_funnel` | `lead_key` | 1 | One row per surviving lead |
+| `gold.fact_lead_funnel` | `lead_created_ts_utc` | 1 | Kept |
+| `gold.fact_lead_funnel` | `region_key` | 1 | Strict |
+| `gold.fact_lead_funnel` | `campaign_key` | 1 | First touch: the surviving (earliest) lead's campaign |
+| `gold.fact_lead_funnel` | `channel_key` | 1 | As `fact_lead` |
+| `gold.fact_lead_funnel` | `product_key` | 1 | Strict |
+| `gold.fact_lead_funnel` | `first_call_ts_utc` | 1 | Null when never called |
+| `gold.fact_lead_funnel` | `first_call_agent_key` | 1 | Null when never called |
+| `gold.fact_lead_funnel` | `last_call_agent_key` | 1 | Last call on or before the application date |
+| `gold.fact_lead_funnel` | `call_attempt_count` | 1 | Calls in `bridge_lead_call` |
+| `gold.fact_lead_funnel` | `connected_call_count` | 1 | Assumption 2 |
+| `gold.fact_lead_funnel` | `minutes_to_first_call` | 1 | Null when never called |
+| `gold.fact_lead_funnel` | `within_first_call_sla_flag` | 1 | Against the region's SLA; false when never called |
+| `gold.fact_lead_funnel` | `quoted_flag` | 1 | Quoted or later call, or a policy |
+| `gold.fact_lead_funnel` | `application_flag` | 1 | Application or sale call, or a policy |
+| `gold.fact_lead_funnel` | `policy_key` | 1 | Null without a policy |
+| `gold.fact_lead_funnel` | `policy_start_date_key` | 1 | Null without a policy |
+| `gold.fact_lead_funnel` | `annual_premium_gbp` | 2 | Financial data tied to an individual |
+| `gold.fact_lead_funnel` | `days_lead_to_policy` | 1 | Lead creation to application date |
+| `gold.fact_lead_funnel` | `consent_phone_current_flag` | 2 | From `silver.consent_current` |
+| `gold.fact_lead_funnel` | `dedup_cluster_size` | 1 | Kept |
+| `gold.fact_lead_funnel` | `lead_in_business_hours_flag` | 1 | Assumption 9 |
+| `gold.bridge_lead_call` | `lead_key` | 1 | Surviving lead |
+| `gold.bridge_lead_call` | `call_key` | 1 | Call with a surviving lead |
+| `gold.bridge_lead_call` | `call_sequence` | 1 | Order of the call for its lead |
+| `gold.bridge_user_region` | `user_principal_name` | 2 | Staff sign-in name for RLS; exempt from the email pattern only |
+| `gold.bridge_user_region` | `role_name` | 1 | Kept |
+| `gold.bridge_user_region` | `region_code` | 1 | `ALL` kept as stated |
+| `gold.bridge_user_region` | `region_key` | 1 | Null for `ALL` |
+| `gold.bridge_user_region` | `all_regions_flag` | 1 | True for `ALL` |

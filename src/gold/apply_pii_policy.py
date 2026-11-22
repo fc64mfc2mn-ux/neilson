@@ -23,8 +23,8 @@
 
 `call_notes` and `recording_url` never reach gold. `pii_leaks` scans every
 column of every gold table against real raw values from silver and bronze and
-against email, phone and recording-URL patterns; `build_dim_lead` stops the
-run on any hit. Column tiers are in docs/DATA_CLASSIFICATION.md.
+against email, phone and recording-URL patterns; `scan_gold_for_pii`, the
+last pipeline stage, stops the run on any hit. Column tiers are in docs/DATA_CLASSIFICATION.md.
 """
 
 from __future__ import annotations
@@ -88,7 +88,18 @@ GOLD_TABLES = (
     "gold.dim_agent",
     "gold.dim_lead",
     "gold.dim_lead_nopii",
+    "gold.fact_lead",
+    "gold.fact_call",
+    "gold.fact_policy",
+    "gold.fact_marketing_spend_daily",
+    "gold.fact_lead_funnel",
+    "gold.bridge_lead_call",
+    "gold.bridge_user_region",
 )
+# Staff sign-in names that Power BI RLS matches with USERPRINCIPALNAME(): emails by design
+# (tier 2, workforce identity). Exempt from the email pattern only; still compared with
+# every raw customer and agent value.
+EMAIL_PATTERN_EXEMPT = frozenset({("gold.bridge_user_region", "user_principal_name")})
 
 EMAIL_PATTERN = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
 PHONE_PATTERN = r"^\+?\(?[0-9][0-9 ().-]{8,}[0-9]$"
@@ -275,6 +286,12 @@ def raw_pii_values(spark: SparkSession, config: dict) -> DataFrame:
     )
 
 
+def _in_pairs(rules: frozenset[tuple[str, str]]) -> Column:
+    """True for cells whose (table, column) is in `rules`."""
+    conds = [(F.col("table") == t) & (F.col("column") == c) for t, c in sorted(rules)]
+    return reduce(lambda a, b: a | b, conds, F.lit(False))
+
+
 def pii_leaks(tables: dict[str, DataFrame], raw: DataFrame) -> DataFrame:
     """(table, column, reason, cells) for every gold cell that looks like raw PII.
 
@@ -286,8 +303,9 @@ def pii_leaks(tables: dict[str, DataFrame], raw: DataFrame) -> DataFrame:
     calendar labels (`NAME_CHECK_EXEMPT`). The result never contains the value.
     """
     norm = lambda c: F.lower(F.trim(c))  # noqa: E731
-    known = raw.select(norm(F.col("value")).alias("_v"), "kind").distinct()
-    found = []
+    # One long frame of distinct (table, column, value) cells for every table, then one
+    # join with the raw values: one plan, not one branch per table.
+    longs = []
     for table, df in tables.items():
         cells = [
             F.struct(
@@ -297,37 +315,37 @@ def pii_leaks(tables: dict[str, DataFrame], raw: DataFrame) -> DataFrame:
             )
             for f in df.schema.fields
         ]
-        long = (
+        longs.append(
             df.select(F.explode(F.array(*cells)).alias("c"))
-            .select("c.*")
+            .select(F.lit(table).alias("table"), "c.*")
             .where("value IS NOT NULL")
-            .withColumn("_v", norm(F.col("value")))
+            .groupBy("table", "column", "is_string", "value")
+            .agg(F.count(F.lit(1)).alias("n"))
         )
-        exempt = [c for t, c in NAME_CHECK_EXEMPT if t == table]
-        name_exempt = F.col("column").isin(*exempt) & F.col("kind").isin(*NAME_KINDS)
-        equal = (
-            long.join(known, "_v")
-            .where(F.col("is_string") | F.col("kind").isin(*PHONE_KINDS))
-            .where(~name_exempt)
-            .select("column", F.concat(F.lit("raw "), "kind").alias("reason"))
-        )
-        s = long.where("is_string")
-        digits = F.length(F.regexp_replace("value", r"\D", ""))
-        patterns = [
-            s.where(F.col("value").rlike(EMAIL_PATTERN)).select(
-                "column", F.lit("email pattern").alias("reason")
-            ),
-            s.where(F.trim("value").rlike(PHONE_PATTERN) & (digits >= 10)).select(
-                "column", F.lit("phone pattern").alias("reason")
-            ),
-            s.where(F.col("value").rlike(URL_PATTERN)).select(
-                "column", F.lit("recording URL pattern").alias("reason")
-            ),
-        ]
-        hits = reduce(DataFrame.unionByName, [equal, *patterns])
-        found.append(hits.groupBy("column", "reason").agg(F.count(F.lit(1)).alias("cells"))
-                     .select(F.lit(table).alias("table"), "column", "reason", "cells"))  # fmt: skip
-    return reduce(DataFrame.unionByName, found)
+    cells = reduce(DataFrame.unionByName, longs).withColumn("_v", norm(F.col("value")))
+    known = raw.select(norm(F.col("value")).alias("_v"), "kind").distinct()
+
+    equal = (
+        cells.join(known, "_v")
+        .where(F.col("is_string") | F.col("kind").isin(*PHONE_KINDS))
+        .where(~(_in_pairs(NAME_CHECK_EXEMPT) & F.col("kind").isin(*NAME_KINDS)))
+        .select("table", "column", F.concat(F.lit("raw "), "kind").alias("reason"), "n")
+    )
+    s = cells.where("is_string")
+    digits = F.length(F.regexp_replace("value", r"\D", ""))
+    patterns = [
+        s.where(F.col("value").rlike(EMAIL_PATTERN) & ~_in_pairs(EMAIL_PATTERN_EXEMPT)).select(
+            "table", "column", F.lit("email pattern").alias("reason"), "n"
+        ),
+        s.where(F.trim("value").rlike(PHONE_PATTERN) & (digits >= 10)).select(
+            "table", "column", F.lit("phone pattern").alias("reason"), "n"
+        ),
+        s.where(F.col("value").rlike(URL_PATTERN)).select(
+            "table", "column", F.lit("recording URL pattern").alias("reason"), "n"
+        ),
+    ]
+    hits = reduce(DataFrame.unionByName, [equal, *patterns])
+    return hits.groupBy("table", "column", "reason").agg(F.sum("n").alias("cells"))
 
 
 # ------------------------------------------------------------------ stage
@@ -340,7 +358,6 @@ class DimLeadResult:
     nopii_rows: int
     postcode_mismatches: int
     phone_unparseable: int
-    tables_scanned: int
 
 
 def build_dim_lead(spark: SparkSession, config: dict) -> DimLeadResult:
@@ -378,20 +395,31 @@ def build_dim_lead(spark: SparkSession, config: dict) -> DimLeadResult:
                                           config=config, action="flagged",
                                           detail_col="detail")  # fmt: skip
 
-    built = [t for t in GOLD_TABLES if table_exists(spark, config, t)]
-    present = {t: read_table(spark, config, t) for t in built}
-    leaks = pii_leaks(present, raw_pii_values(spark, config)).collect()
+    result = DimLeadResult(rows_in, rows_out, nopii_rows, flags["lead_postcode_region_mismatch"],
+                           flags["lead_phone_unparseable"])  # fmt: skip
+    log.info(
+        "Reconciled gold.dim_lead: %d from silver.lead, %d in gold.dim_lead_nopii; "
+        "%d postcodes and %d phones flagged",
+        rows_in, nopii_rows, result.postcode_mismatches, result.phone_unparseable,
+    )  # fmt: skip
+    return result
+
+
+def scan_gold_for_pii(spark: SparkSession, config: dict) -> int:
+    """Last pipeline stage: every gold table must exist and hold no raw PII.
+
+    Returns the number of tables scanned. The error names table, column and
+    reason, never the value.
+    """
+    missing = [t for t in GOLD_TABLES if not table_exists(spark, config, t)]
+    if missing:
+        raise ReconciliationError(f"PII scan: gold tables not built: {missing}")
+    tables = {t: read_table(spark, config, t) for t in GOLD_TABLES}
+    leaks = pii_leaks(tables, raw_pii_values(spark, config)).collect()
     if leaks:
         raise ReconciliationError(
             "Raw PII in gold: "
             + "; ".join(f"{r.table}.{r.column} {r.reason} ({r.cells})" for r in leaks)
         )
-    result = DimLeadResult(rows_in, rows_out, nopii_rows, flags["lead_postcode_region_mismatch"],
-                           flags["lead_phone_unparseable"], len(present))  # fmt: skip
-    log.info(
-        "Reconciled gold.dim_lead: %d from silver.lead, %d in gold.dim_lead_nopii; "
-        "%d postcodes and %d phones flagged; PII scan clean over %d gold tables",
-        rows_in, nopii_rows, result.postcode_mismatches, result.phone_unparseable,
-        result.tables_scanned,
-    )  # fmt: skip
-    return result
+    log.info("PII scan clean: %d gold tables, every column", len(tables))
+    return len(tables)

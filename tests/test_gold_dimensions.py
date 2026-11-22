@@ -3,13 +3,16 @@ dim_product, dim_agent as SCD2). dim_lead is step 11."""
 
 from __future__ import annotations
 
+import hashlib
+import shutil
 from datetime import date
+from pathlib import Path
 
 import pytest
 from pyspark.sql import functions as F
 
 from src.common.dq import ReconciliationError
-from src.common.tables import read_table
+from src.common.tables import read_table, table_path
 from src.gold.build_dimensions import (
     UNKNOWN_KEY,
     build_dim_date,
@@ -39,6 +42,24 @@ def test_surrogate_keys_are_deterministic_and_never_the_unknown_key(spark):
     assert once[0] == once[2] and once[0] != once[1]
     assert UNKNOWN_KEY == -1 and UNKNOWN_KEY not in once
     assert all(k > 0 for k in once)
+
+
+def test_surrogate_keys_are_52_bit_and_reproducible_outside_spark(spark):
+    """Below 2^53, so Power BI (IEEE double) holds every key exactly.
+
+    The key is the first 13 hex digits (52 bits) of SHA-256 of the "|"-joined
+    natural key, so anyone can recompute it without Spark.
+    """
+    natural = [("UK",), ("AG0008|2026-04-01",), ("CMP-UK-001",), ("x" * 200,)]
+    df = spark.createDataFrame(natural, "code string")
+    got = [r.k for r in df.select(surrogate_key("code").alias("k")).collect()]
+    want = [int(hashlib.sha256(v.encode()).hexdigest()[:13], 16) for (v,) in natural]
+    assert got == want
+    many = spark.range(20_000).select(surrogate_key(F.col("id").cast("string")).alias("k"))
+    stats = many.agg(F.max("k").alias("hi"), F.min("k").alias("lo"),
+                     F.countDistinct("k").alias("n")).first()  # fmt: skip
+    assert stats.lo >= 0 and stats.hi < 2**53 and stats.n == 20_000
+    assert int(float(stats.hi)) == stats.hi  # survives a round trip through a double
 
 
 def test_dim_date_is_a_full_contiguous_2026_calendar(spark):
@@ -80,6 +101,8 @@ def test_dim_agent_scd2_windows_follow_source_row_order(spark):
     )  # fmt: skip
     unknown = rows[("UNKNOWN", None)]
     assert (unknown.agent_key, unknown.is_current) == (UNKNOWN_KEY, True)
+    # Data minimisation: employee names stay in silver (brief tier 2).
+    assert "agent_name" not in dim_agent(silver).columns
     assert len({r.agent_key for r in rows.values()}) == 4
 
 
@@ -198,21 +221,60 @@ def test_each_dimension_reconciles_to_its_silver_source(spark, real_gold):
         assert read_table(spark, config, table).count() == rows_out
 
 
+# Natural key(s) behind each surrogate key.
+DIM_KEYS = {
+    "gold.dim_date": ("date_key", ("date",)),
+    "gold.dim_region": ("region_key", ("region_code",)),
+    "gold.dim_channel": ("channel_key", ("channel_code",)),
+    "gold.dim_campaign": ("campaign_key", ("campaign_id",)),
+    "gold.dim_product": ("product_key", ("product_code",)),
+    "gold.dim_agent": ("agent_key", ("agent_id", "valid_from")),
+}
+
+
+def _key_rows(spark, config) -> dict[str, list[tuple]]:
+    """Per dimension, (natural key..., surrogate key) sorted by natural key."""
+    out = {}
+    for table, (key, natural) in DIM_KEYS.items():
+        rows = read_table(spark, config, table).select(*natural, key).collect()
+        out[table] = sorted(tuple(str(v) for v in r) for r in rows)
+    return out
+
+
 @pytest.mark.slow
-def test_surrogate_keys_unique_and_stable_across_reruns(spark, real_gold):
+@pytest.mark.parametrize("table", sorted(DIM_KEYS))
+def test_no_surrogate_key_collisions(spark, real_gold, table):
+    """One key per natural key and one natural key per key, every key below 2^53."""
     config, _ = real_gold
-    keys = {
-        "gold.dim_region": "region_key", "gold.dim_channel": "channel_key",
-        "gold.dim_campaign": "campaign_key", "gold.dim_product": "product_key",
-        "gold.dim_agent": "agent_key", "gold.dim_date": "date_key",
-    }  # fmt: skip
-    before = {t: sorted(r[0] for r in read_table(spark, config, t).select(k).collect())
-              for t, k in keys.items()}  # fmt: skip
+    key, natural = DIM_KEYS[table]
+    d = read_table(spark, config, table)
+    r = d.agg(
+        F.count(F.lit(1)).alias("rows"),
+        F.countDistinct(key).alias("keys"),
+        F.countDistinct(*natural).alias("naturals"),
+        F.max(key).alias("hi"),
+    ).first()
+    assert r.rows == r.keys == r.naturals, table
+    assert r.hi < 2**53, table
+
+
+@pytest.mark.slow
+def test_surrogate_keys_identical_when_rebuilt_from_empty_gold(spark, real_gold):
+    """Build the dimensions twice from an empty gold layer: same keys, row for row."""
+    config, _ = real_gold
+    gold_root = Path(table_path(config, "gold.dim_date")).parent
+    builds = []
+    for n in (1, 2):
+        shutil.rmtree(gold_root, ignore_errors=True)
+        assert not gold_root.exists()
+        build_dimensions(spark, {**config, "run_id": f"test-gold-empty-{n}"})
+        builds.append(_key_rows(spark, config))
+    # And once more over the existing tables (a plain rerun).
     build_dimensions(spark, {**config, "run_id": "test-gold-rerun"})
-    for t, k in keys.items():
-        after = sorted(r[0] for r in read_table(spark, config, t).select(k).collect())
-        assert after == before[t], t
-        assert len(set(after)) == len(after), t
+    builds.append(_key_rows(spark, config))
+    for table in DIM_KEYS:
+        assert builds[0][table] == builds[1][table] == builds[2][table], table
+        assert len(builds[0][table]) > 0, table
 
 
 @pytest.mark.slow
@@ -239,8 +301,8 @@ def test_dim_agent_scd2_properties(spark, real_gold):
         ("AG0023", "Core", False), ("AG0023", "Senior", True),
         ("AG0037", "Trainee", False), ("AG0037", "Core", True),
     }  # fmt: skip
-    # Employee contact and HR fields stay out of gold.
-    assert not {"agent_email", "manager_name", "hire_date", "fte"} & set(a.columns)
+    # Employee personal and HR fields stay out of gold (data minimisation).
+    assert not {"agent_name", "agent_email", "manager_name", "hire_date", "fte"} & set(a.columns)
 
 
 @pytest.mark.slow

@@ -168,3 +168,8 @@ confirm or overturn. The query and the result will be recorded against the entry
     value conflict, a null is filled from the other copy. *Reason:* the earliest matches
     the linked call's agent (1 of 1) and monthly x 12 (2 of 3; the later copy 0 of 3).
     *Reverse:* `merge_conflicting` in `src/silver/policy.py`.
+
+24. **Surrogate key width.** *Choice:* the first 52 bits of SHA-256 of the natural key,
+    below 2^53 so Power BI's double-precision numbers hold every key exactly (60 bits did
+    not); deterministic, with a collision test per dimension. *Reverse:* `KEY_HEX_DIGITS`
+    in `src/gold/build_dimensions.py`.

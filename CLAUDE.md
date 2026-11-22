@@ -124,6 +124,13 @@ pytest
   Power BI Import with a shared service account does not pass the user's identity to UC;
   the data-layer filter applies only with DirectQuery and SSO passthrough, so the Power BI
   role stays as defence in depth.
+- **Surrogate keys** are 52 bits (below 2^53, exact in Power BI), deterministic,
+  collision-tested per dimension.
+- **`agent_name` is not in gold** (data minimisation); `agent_id`, team, region and
+  seniority band are.
+- **`dim_region` and `dim_product` have no UNKNOWN member** (the brief gives UNKNOWN only
+  to channel, campaign and agent). At step 12 fact builds must raise an error if any
+  region or product key is unresolved. They must never drop rows or set nulls.
 
 ## Reference implementation (read-only)
 
@@ -183,9 +190,10 @@ governance risks.
 
 ## Where things stand
 
-Steps 1 to 9 done: scaffold; assumptions and defect status; config, UTC session, runner;
+Steps 1 to 10 done: scaffold; assumptions and defect status; config, UTC session, runner;
 bronze (append-only, `_source_row`); DQ framework; silver reference tables; silver leads
 and consent; silver calls (AU converted, defect 17 kept and flagged, defect 26 flagged);
 silver policy and spend (spend minor units rescaled at 100, 180 CAD June rows
-quarantined).
-Next: step 10 of `docs/PLAN.md` (gold dimensions).
+quarantined); gold dimensions with a deterministic SCD2 `dim_agent` (1,139 call leads
+and 615 call agents resolve to UNKNOWN).
+Next: step 11 of `docs/PLAN.md` (PII policy and `gold.dim_lead`).

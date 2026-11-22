@@ -8,9 +8,10 @@ member), `gold.dim_product` (`TERM_LIFE`, `OVER50`, `CI`) and `gold.dim_agent`
 (SCD2: one row per agent per validity window, plus an `UNKNOWN` member).
 `gold.dim_lead` is built at step 11 (src/gold/apply_pii_policy.py).
 
-Surrogate keys are deterministic: the first 60 bits of SHA-256 over the
-natural key (positive bigint), so a rerun, or a new member, never moves an
-existing key. `UNKNOWN` members have key -1. `date_key` is yyyymmdd.
+Surrogate keys are deterministic: the first 52 bits (13 hex digits) of
+SHA-256 over the natural key, a positive bigint below 2^53 so Power BI holds
+it exactly. A rerun, or a new member, never moves an existing key. `UNKNOWN`
+members have key -1. `date_key` is yyyymmdd.
 
 SCD2 windows (assumption 8): the roster has no dates. Per agent, versions are
 ordered by bronze `_source_row`. A single version is valid from 2026-01-01 to
@@ -18,8 +19,9 @@ ordered by bronze `_source_row`. A single version is valid from 2026-01-01 to
 later from 2026-04-01 (the reporting period start). `valid_to` is inclusive.
 Three or more versions have no rule and stop the stage.
 
-Employee contact and HR fields (`agent_email`, `manager_name`, `hire_date`,
-`fte`) stay in silver; gold keeps what reporting needs.
+Employee personal and HR fields (`agent_name`, `agent_email`, `manager_name`,
+`hire_date`, `fte`) stay in silver (data minimisation, brief tier 2); gold
+keeps `agent_id`, team, region and seniority band.
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from src.common.tables import overwrite_table, read_table
 log = logging.getLogger("northgate.gold")
 
 UNKNOWN_KEY = -1
+KEY_HEX_DIGITS = 13  # 52 bits: below 2^53, exact as a Power BI (double) number
 UNKNOWN_CODE = "UNKNOWN"
 CALENDAR_START = date(2026, 1, 1)
 CALENDAR_END = date(2026, 12, 31)
@@ -67,11 +70,11 @@ class Coverage:
 
 
 def surrogate_key(*cols: str | Column) -> Column:
-    """Positive bigint from SHA-256 of the natural key: stable across reruns."""
+    """Positive bigint below 2^53 from SHA-256 of the natural key: stable across reruns."""
     parts = [F.coalesce(F.col(c) if isinstance(c, str) else c, F.lit("")).cast("string")
              for c in cols]  # fmt: skip
     digest = F.sha2(F.concat_ws("|", *parts), 256)
-    return F.conv(F.substring(digest, 1, 15), 16, 10).cast("bigint")
+    return F.conv(F.substring(digest, 1, KEY_HEX_DIGITS), 16, 10).cast("bigint")
 
 
 def _with_unknown(df: DataFrame, key: str, code: str, labels: dict[str, str]) -> DataFrame:
@@ -210,7 +213,6 @@ def dim_agent(agent: DataFrame) -> DataFrame:
         .select(
             surrogate_key("agent_id", "valid_from").alias("agent_key"),
             "agent_id",
-            "agent_name",
             "region_code",
             "team",
             "seniority_band",
@@ -221,7 +223,7 @@ def dim_agent(agent: DataFrame) -> DataFrame:
             F.col("source_row").cast("long").alias("source_row"),
         )
     )
-    unknown = _with_unknown(df, "agent_key", "agent_id", {"agent_name": "Unknown agent"})
+    unknown = _with_unknown(df, "agent_key", "agent_id", {"team": "Unknown"})
     return (
         unknown.withColumn(
             "valid_from",

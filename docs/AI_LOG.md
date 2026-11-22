@@ -480,3 +480,27 @@ the edit script stopped the change.
 Open: the brief names no no-PII view, so `gold.dim_lead_nopii` is our name. Dedup at
 step 7 compares digits-only phones, while the gold hash uses E.164, so the same number
 written in national and international form is not linked by dedup. Not measured yet.
+
+### 2026-11-22  Step 12: gold facts, bridges and fact_lead_funnel
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, opening): "Step 12 is approved: gold facts and fact_lead_funnel (PLAN.md
+step 12). Same method: tests first, confirm they fail, implement, reconcile, commit
+slices, stop and report."
+What it produced: decisions recorded (CLAUDE.md, assumption 26, open question g); the
+`phone_normalisation_extra_links` query and test (E.164 finds the same 758 duplicates, 0
+extra links); the runner now stops on any unbuilt or failing stage; `build_facts.py`
+(four facts), `build_lead_funnel.py` (funnel, both bridges); the PII scan as the last
+stage over all 15 gold tables; assumptions 27 (policy GBP) and 28 (funnel definitions);
+assumption 20 revised (null `lead_key`, not an `UNKNOWN` lead); every gold column
+classified. Two full runs from an empty lakehouse: every table the same size, no
+duplicate rows; `dq_exception` keeps one identical slice per run.
+Mistakes caught: (1) The first slow run of the fact tests took 47 minutes and died out of
+memory. The PII scan built one plan branch per table, each recomputing and joining the
+raw value set; rewritten as one pass over distinct cells (30 s). (2) The PII scan first
+ran inside `build_dim_lead`, before the facts existed, so a fresh run would never have
+scanned them; moved to a final stage that requires every gold table. (3) The open
+question for defect 29 first named the AdHub owner; leads come from LeadFlow CRM, so the
+Digital Acquisition Lead. (4) A timing probe was run from /tmp without the repo on the
+path, and once under a tool timeout with grep buffering, so it showed nothing.
+Open: 675 policies have no GBP premium (no CAD June rate, no July rates), assumption 27;
+the attribution window (assumption 10) is still not applied to any measure.

@@ -199,11 +199,12 @@ governance risks.
 
 ## Where things stand
 
-Steps 1 to 11 done: scaffold; assumptions and defect status; config, UTC session, runner;
+Steps 1 to 12 done: scaffold; assumptions and defect status; config, UTC session, runner;
 bronze (append-only, `_source_row`); DQ framework; silver reference tables; silver leads
 and consent; silver calls (AU converted, defect 17 kept and flagged, defect 26 flagged);
 silver policy and spend (spend minor units rescaled at 100, 180 CAD June rows
 quarantined); gold dimensions with a deterministic SCD2 `dim_agent` (1,139 call leads
 and 615 call agents resolve to UNKNOWN); PII policy with `gold.dim_lead` (47,201),
-`gold.dim_lead_nopii` and a gold-wide PII scan in the pipeline.
-Next: step 12 of `docs/PLAN.md` (gold facts and `fact_lead_funnel`).
+`gold.dim_lead_nopii`; gold facts, both bridges and `fact_lead_funnel` (47,201), the PII
+scan as the last stage; the runner stops on any unbuilt or failing stage.
+Next: step 13 of `docs/PLAN.md` (tests, CI, DQ gate).

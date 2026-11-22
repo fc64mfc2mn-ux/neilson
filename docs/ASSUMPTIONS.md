@@ -53,13 +53,14 @@ confirm or overturn. The query and the result will be recorded against the entry
    forbids silent nulls. *Reverse:* load the rate once Treasury supplies it, then rerun.
 
 8. **SCD2 effective dates.** *Ambiguity:* some agents appear twice with a different team
-   or seniority and no dates. *Options:* use the first-seen load date; use file row
-   order; keep current state only. *Choice:* an approximation. The earlier file row (lower
-   bronze `_source_row`) is valid from 2026-01-01 to 2026-03-31; the later row is current from 2026-04-01, the
-   start of the reporting period. The later rows for AG0008 (CA) and AG0037 (AU) name UK
-   teams, which do not match their region. Those team values are quarantined and the
-   earlier team is kept (defect 27). *Reason:* the source has no dates, so the proxy is
-   stated rather than hidden. *Reverse:* replace the dates with HR effective dates.
+   or seniority and no dates. *Options:* first-seen load date; file row order; current
+   state only. *Choice (proxy):* versions in bronze `_source_row` order. One version:
+   valid 2026-01-01 to 9999-12-31. Two: the earlier 2026-01-01 to 2026-03-31, the later
+   current from 2026-04-01 (reporting start); `valid_to` inclusive. A call takes the
+   version valid on its UTC date. Three or more versions stop the stage. The later
+   AG0008 and AG0037 rows name UK teams; those team values are quarantined and the
+   earlier team kept (defect 27). *Reason:* the source has no dates, so the proxy is
+   stated, not hidden. *Reverse:* replace the dates with HR effective dates.
 
 9. **Business hours.** *Ambiguity:* Ops excludes leads "outside regional business
    hours" without defining weekends or holidays. *Options:* `ref_region` hours every day;

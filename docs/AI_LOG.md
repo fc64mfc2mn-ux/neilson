@@ -435,3 +435,22 @@ does carry daily hours; the gap is the weekend and holiday rule, so the question
 that. Owner names were first written loosely ("PolicyCore owner"); replaced with the
 brief's names (Finance Systems Manager, Operations Resource Planning Manager, Finance
 Treasury).
+
+### 2026-11-22  Step 10: gold dimensions
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): dim_date, dim_region, dim_channel, dim_campaign, dim_product, and
+dim_agent as SCD2 from `_source_row` order; deterministic keys; key coverage for every
+future fact foreign key; reconcile each dimension to silver; no dim_lead.
+What it produced: `src/gold/build_dimensions.py`; `tests/test_gold_dimensions.py` (7
+fast, 5 slow, written first and confirmed failing). Keys: first 60 bits of SHA-256 of
+the natural key, `UNKNOWN` = -1, `date_key` yyyymmdd; a rerun returns identical keys.
+dim_agent: 45 versions for 42 agents plus `UNKNOWN`; windows contiguous, one current
+row each. Coverage: 304 orphan-campaign leads already `UNKNOWN`; 615 calls on AG9001 to
+AG9004 -> `UNKNOWN` agent; 1,139 call leads unmatched (1,094 ghost + 45 quarantined);
+1 policy lead quarantined at step 7 -> `UNKNOWN`; 404 null policy leads keep NULL.
+Agent email, manager name, hire date and FTE are left out of gold.
+Mistakes caught: (1) the coverage test first expected 0 unmatched agents; AG9001 to
+AG9004 are not agent ids in the dimension, so 615 unmatched (to `UNKNOWN`) was right,
+fixed before running. (2) The call-resolution test built timestamps from Python
+datetimes, which the host reads as BST, so 00:00 on 1 April became 31 March; the test
+now builds UTC timestamps in Spark. The same trap hit step 8.

@@ -7,6 +7,14 @@ Marketing Spend (GBP),region,US,324058.700000
 Marketing Spend (GBP),month,2026-04,598324.430000
 Marketing Spend (GBP),month,2026-05,613416.360000
 Marketing Spend (GBP),month,2026-06,400828.890000
+Marketing Spend (GBP),channel,AFFILIATE,180772.520000
+Marketing Spend (GBP),channel,AGGREGATOR,210683.790000
+Marketing Spend (GBP),channel,DIRECT_MAIL,112655.990000
+Marketing Spend (GBP),channel,DISPLAY,205175.770000
+Marketing Spend (GBP),channel,ORGANIC,0.000000
+Marketing Spend (GBP),channel,PAID_SEARCH,570334.670000
+Marketing Spend (GBP),channel,PAID_SOCIAL,259905.130000
+Marketing Spend (GBP),channel,TV,73041.810000
 Leads (Deduplicated),all,ALL,47201.000000
 Leads (Deduplicated),region,AU,8955.000000
 Leads (Deduplicated),region,CA,11317.000000
@@ -15,6 +23,21 @@ Leads (Deduplicated),region,US,8027.000000
 Leads (Deduplicated),month,2026-04,15420.000000
 Leads (Deduplicated),month,2026-05,16330.000000
 Leads (Deduplicated),month,2026-06,15451.000000
+Leads (Deduplicated),channel,AFFILIATE,5183.000000
+Leads (Deduplicated),channel,AGGREGATOR,10235.000000
+Leads (Deduplicated),channel,DIRECT_MAIL,1168.000000
+Leads (Deduplicated),channel,DISPLAY,3512.000000
+Leads (Deduplicated),channel,ORGANIC,788.000000
+Leads (Deduplicated),channel,PAID_SEARCH,16094.000000
+Leads (Deduplicated),channel,PAID_SOCIAL,9470.000000
+Leads (Deduplicated),channel,TV,751.000000
+Leads (Deduplicated),first_call_bucket,0-15 min,3706.000000
+Leads (Deduplicated),first_call_bucket,15-30 min,9400.000000
+Leads (Deduplicated),first_call_bucket,30-60 min,9480.000000
+Leads (Deduplicated),first_call_bucket,1-4 h,4607.000000
+Leads (Deduplicated),first_call_bucket,4-24 h,6174.000000
+Leads (Deduplicated),first_call_bucket,Over 24 h,766.000000
+Leads (Deduplicated),first_call_bucket,(blank),13068.000000
 Cost Per Lead (GBP),all,ALL,34.163888
 Cost Per Lead (GBP),region,AU,43.745563
 Cost Per Lead (GBP),region,CA,23.945599
@@ -23,6 +46,14 @@ Cost Per Lead (GBP),region,US,40.371085
 Cost Per Lead (GBP),month,2026-04,38.801844
 Cost Per Lead (GBP),month,2026-05,37.563770
 Cost Per Lead (GBP),month,2026-06,25.941938
+Cost Per Lead (GBP),channel,AFFILIATE,34.877970
+Cost Per Lead (GBP),channel,AGGREGATOR,20.584640
+Cost Per Lead (GBP),channel,DIRECT_MAIL,96.452046
+Cost Per Lead (GBP),channel,DISPLAY,58.421347
+Cost Per Lead (GBP),channel,ORGANIC,0.000000
+Cost Per Lead (GBP),channel,PAID_SEARCH,35.437720
+Cost Per Lead (GBP),channel,PAID_SOCIAL,27.445103
+Cost Per Lead (GBP),channel,TV,97.259401
 Lead to Policy Conversion Rate,all,ALL,0.095316
 Lead to Policy Conversion Rate,region,AU,0.053043
 Lead to Policy Conversion Rate,region,CA,0.104445
@@ -31,6 +62,11 @@ Lead to Policy Conversion Rate,region,US,0.112994
 Lead to Policy Conversion Rate,month,2026-04,0.091569
 Lead to Policy Conversion Rate,month,2026-05,0.099143
 Lead to Policy Conversion Rate,month,2026-06,0.095010
+Lead to Policy Conversion Rate,seniority,(blank),
+Lead to Policy Conversion Rate,seniority,Core,0.163387
+Lead to Policy Conversion Rate,seniority,Senior,0.153203
+Lead to Policy Conversion Rate,seniority,Trainee,0.038913
+Lead to Policy Conversion Rate,seniority,Unknown,
 Average Handle Time (Seconds),all,ALL,517.556781
 Average Handle Time (Seconds),region,AU,469.591284
 Average Handle Time (Seconds),region,CA,550.223432
@@ -48,3 +84,19 @@ Time to First Call (Median Minutes),region,US,40.250000
 Time to First Call (Median Minutes),month,2026-04,38.470000
 Time to First Call (Median Minutes),month,2026-05,38.380000
 Time to First Call (Median Minutes),month,2026-06,38.790000
+Cost Per Policy (GBP),all,ALL,358.428469
+Cost Per Policy (GBP),region,AU,824.718989
+Cost Per Policy (GBP),region,CA,229.265939
+Cost Per Policy (GBP),region,UK,323.399028
+Cost Per Policy (GBP),region,US,357.286329
+Cost Per Policy (GBP),month,2026-04,423.742514
+Cost Per Policy (GBP),month,2026-05,378.885954
+Cost Per Policy (GBP),month,2026-06,273.044203
+Cost Per Policy (GBP),channel,AFFILIATE,241.674492
+Cost Per Policy (GBP),channel,AGGREGATOR,944.770359
+Cost Per Policy (GBP),channel,DIRECT_MAIL,1014.918829
+Cost Per Policy (GBP),channel,DISPLAY,390.068004
+Cost Per Policy (GBP),channel,ORGANIC,0.000000
+Cost Per Policy (GBP),channel,PAID_SEARCH,371.795743
+Cost Per Policy (GBP),channel,PAID_SOCIAL,217.493833
+Cost Per Policy (GBP),channel,TV,1123.720154

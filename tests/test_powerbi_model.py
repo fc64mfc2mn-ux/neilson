@@ -15,7 +15,14 @@ from pathlib import Path
 import pytest
 
 from src.common.findings import load_findings
-from src.powerbi_expected import CORE_MEASURES, FINDINGS, expected_csv, expected_rows, run_query
+from src.powerbi_expected import (
+    CORE_MEASURES,
+    FINDINGS,
+    MEASURES,
+    expected_csv,
+    expected_rows,
+    run_query,
+)
 
 FIXTURE = "global_temp."
 REPO = Path(__file__).resolve().parents[1]
@@ -70,7 +77,8 @@ D_APR, D_MAY = 20260410, 20260512
 
 
 def _model_fixture(spark):
-    """Two regions, April and May. Lead keys: UK 1-4 (April), AU 5 (May)."""
+    """Two regions, April and May; channels TV (7) and WEB (8); agent versions 31 (Core)
+    and 32 (Trainee). Lead keys: UK 1-4 (April), AU 5 (May)."""
     _views(
         spark,
         dim_region=REGIONS,
@@ -78,30 +86,34 @@ def _model_fixture(spark):
             [(D_APR, "2026-04"), (D_MAY, "2026-05")],
             "date_key int, year_month string",
         ),
-        fact_lead=(
-            [(k, D_APR) for k in (1, 2, 3, 4)] + [(5, D_MAY)],
-            "lead_key long, lead_created_date_key int",
+        dim_channel=([(7, "TV"), (8, "WEB")], "channel_key long, channel_code string"),
+        dim_agent_seniority=(
+            [(31, "Core"), (32, "Trainee")],
+            "agent_key long, seniority_band string",
         ),
         fact_lead_funnel=(
             [
-                (1, 1, Decimal("10"), 1),
-                (2, 1, Decimal("20"), 0),
-                (3, 1, Decimal("40"), 0),
-                (4, 1, None, 0),
-                (5, 2, Decimal("7"), 1),
+                (1, 1, D_APR, 7, 31, Decimal("10"), "0-15 min", 1),
+                (2, 1, D_APR, 7, 32, Decimal("20"), "15-30 min", 0),
+                (3, 1, D_APR, 8, 31, Decimal("40"), "30-60 min", 0),
+                (4, 1, D_APR, 8, None, None, None, 0),  # never called
+                (5, 2, D_MAY, 7, 32, Decimal("7"), "0-15 min", 1),
             ],
-            "lead_key long, region_key long, minutes_to_first_call decimal(12,2), "
-            "connected_call_count int",
-        ),  # fmt: skip
+            "lead_key long, region_key long, lead_created_date_key int, channel_key long, "
+            "last_call_agent_key long, minutes_to_first_call decimal(12,2), "
+            "first_call_bucket string, connected_call_count int",
+        ),
         fact_policy=(
             [
-                (1, 1, True, "INFORCE"),  # counted in April (lead month)
-                (2, 1, True, "CANCELLED"),  # counted: it was sold
-                (3, 1, True, "NTU"),  # never counted
-                (None, 1, False, "INFORCE"),  # no surviving lead: never counted
+                (1, 1, True, "INFORCE", D_APR, 7, 31),  # counted in April (lead month)
+                (2, 1, True, "CANCELLED", D_APR, 7, 32),  # counted: it was sold
+                (3, 1, True, "NTU", D_APR, 8, 31),  # never counted
+                (None, 1, False, "INFORCE", None, None, 31),  # no surviving lead
             ],
-            "lead_key long, region_key long, is_lead_attributed boolean, " "policy_status string",
-        ),  # fmt: skip
+            "lead_key long, region_key long, is_lead_attributed boolean, "
+            "policy_status string, lead_created_date_key int, channel_key long, "
+            "agent_key long",
+        ),
         fact_call=(
             [
                 (1, D_APR, True, 100, 20),
@@ -113,8 +125,8 @@ def _model_fixture(spark):
             "talk_time_seconds int, hold_time_seconds int",
         ),
         fact_marketing_spend_daily=(
-            [(D_APR, 1, Decimal("100")), (D_APR, 2, Decimal("20"))],  # no spend in May
-            "date_key int, region_key long, spend_gbp decimal(14,2)",
+            [(D_APR, 1, 7, Decimal("100")), (D_APR, 2, 8, Decimal("20"))],  # none in May
+            "date_key int, region_key long, channel_key long, spend_gbp decimal(14,2)",
         ),
     )
 
@@ -162,6 +174,36 @@ def test_median_ignores_never_called_leads_and_averages_the_middle_two(spark):
     m = "Time to First Call (Median Minutes)"
     assert e[(m, "region", "UK")] == "20.000000"  # 10, 20, 40; lead 4 never called
     assert e[(m, "all", "ALL")] == "15.000000"  # 7, 10, 20, 40 -> (10 + 20) / 2
+
+
+def test_cost_per_lead_and_cost_per_policy_by_channel(spark):
+    e = _expected(spark)
+    assert e[("Cost Per Lead (GBP)", "channel", "TV")] == "33.333333"  # 100 / 3 leads
+    assert e[("Cost Per Lead (GBP)", "channel", "WEB")] == "10.000000"  # 20 / 2 leads
+    m = "Cost Per Policy (GBP)"
+    assert e[(m, "all", "ALL")] == "60.000000"  # 120 / 2 linked non-NTU policies
+    assert e[(m, "channel", "TV")] == "50.000000"  # 100 / 2
+    assert e[(m, "channel", "WEB")] == ""  # spend but only an NTU policy: BLANK
+
+
+def test_conversion_by_seniority_uses_last_call_agent_for_leads_and_seller_for_policies(spark):
+    e = _expected(spark)
+    m = "Lead to Policy Conversion Rate"
+    assert e[(m, "seniority", "Core")] == "0.500000"  # policy 1 / leads 1 and 3
+    assert e[(m, "seniority", "Trainee")] == "0.500000"  # policy 2 / leads 2 and 5
+    assert e[(m, "seniority", "(blank)")] == ""  # lead 4, never called, no policy
+
+
+def test_first_call_bucket_counts_in_bucket_order_with_never_called_last(spark):
+    _model_fixture(spark)
+    rows = [
+        (v, x) for m, s, v, x in expected_rows(spark, FIXTURE)
+        if m == "Leads (Deduplicated)" and s == "first_call_bucket"
+    ]  # fmt: skip
+    assert rows == [
+        ("0-15 min", "2.000000"), ("15-30 min", "1.000000"), ("30-60 min", "1.000000"),
+        ("(blank)", "1.000000"),
+    ]  # fmt: skip
 
 
 def test_expected_csv_is_byte_identical_on_a_second_run(spark):
@@ -235,6 +277,15 @@ def test_every_required_measure_has_its_exact_name_tier_and_a_description():
     }  # fmt: skip
 
 
+def test_expected_values_cover_measures_in_the_dax_and_need_no_merge():
+    """Every measure in expected_values.csv exists in measures.dax, and no expected_*
+    query joins fact_lead: the keys the model filters on are all in gold (step 16b)."""
+    names = set(_measures())
+    assert {n for n, _ in MEASURES} <= names
+    for _, query in MEASURES:
+        assert "gold.fact_lead " not in _flat(load_findings(FINDINGS)[query]) + " ", query
+
+
 def test_ratios_use_divide_never_the_slash_operator():
     for name, m in _measures().items():
         assert " / " not in m["dax"], name
@@ -253,7 +304,7 @@ SHARED_LOGIC = {
         [
             "COUNT(DISTINCT f.lead_key)",
             "FROM gold.fact_lead_funnel",
-            "d.date_key = l.lead_created_date_key",
+            "d.date_key = f.lead_created_date_key",
         ],
     ),  # fmt: skip
     "Cost Per Lead (GBP)": (
@@ -266,7 +317,8 @@ SHARED_LOGIC = {
         "expected_lead_to_policy_conversion_rate",
         [
             "WHERE p.is_lead_attributed AND COALESCE(p.policy_status, '') <> 'NTU'",
-            "d.date_key = l.lead_created_date_key",
+            "d.date_key = f.lead_created_date_key",
+            "d.date_key = p.lead_created_date_key",
             "p.policies / NULLIF(l.leads, 0)",
         ],
     ),  # fmt: skip
@@ -291,10 +343,20 @@ SHARED_LOGIC = {
             "WHERE c.is_connected",
         ],
     ),  # fmt: skip
+    "Cost Per Policy (GBP)": (
+        ["DIVIDE ( [Marketing Spend (GBP)], [Policies Linked to Surviving Leads] )"],
+        "expected_cost_per_policy_gbp",
+        [
+            "s.spend_gbp / NULLIF(p.policies, 0)",
+            "WHERE p.is_lead_attributed AND COALESCE(p.policy_status, '') <> 'NTU'",
+            "ch.channel_key = p.channel_key",
+            "d.date_key = p.lead_created_date_key",
+        ],
+    ),  # fmt: skip
     "Time to First Call (Median Minutes)": (
         ["MEDIAN ( fact_lead_funnel[minutes_to_first_call] )"],
         "expected_time_to_first_call_median_minutes",
-        ["percentile(f.minutes_to_first_call, 0.5)", "d.date_key = l.lead_created_date_key"],
+        ["percentile(f.minutes_to_first_call, 0.5)", "d.date_key = f.lead_created_date_key"],
     ),
 }
 

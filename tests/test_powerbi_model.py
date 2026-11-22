@@ -220,7 +220,7 @@ def test_expected_csv_is_byte_identical_on_a_second_run(spark):
 BLOCK = re.compile(
     r"// ==== \[(?P<tier>core|stretch|helper)(?: (?P<num>\d+))?\] (?P<head>[^\n]+)\n"
     r"(?P<comments>(?:[ \t]*//[^\n]*\n)*?)"
-    r"\s*MEASURE 'Measures'\[(?P<name>[^\]]+)\] =\n(?P<dax>.*?)(?=\n\s*// ====|\n// Core|\Z)",
+    r"\s*MEASURE 'Key Measures'\[(?P<name>[^\]]+)\] =\n(?P<dax>.*?)(?=\n\s*// ====|\n// Core|\Z)",
     re.DOTALL,
 )
 REQUIRED = {

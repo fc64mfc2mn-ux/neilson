@@ -17,7 +17,7 @@ Row counts are asserted in `tests/test_gold_facts.py` and `tests/test_gold_dimen
 | `dim_region` | Yes | `timezone`, `business_hours_start`, `business_hours_end` | `region_key` |
 | `dim_channel` | Yes | none | `channel_key` |
 | `dim_campaign` | Yes | none | `campaign_key`, `channel_code`, `region_code`, `product_code` |
-| `dim_agent` | Yes | `seniority_band` (it comes from `dim_agent_seniority`), `source_row` | `agent_key`; `agent_id` is tier 2, step 17 hides it |
+| `dim_agent` | Yes | `seniority_band` (kept in gold: the SCD2 versions of AG0008 and AG0037 differ only by it; the model takes it from `dim_agent_seniority`), `source_row` | `agent_key`; `agent_id` is tier 2, step 17 hides it |
 | `dim_agent_seniority` | Yes: `agent_key`, `seniority_band` (tier 2, its own table so step 17's object-level security can hide it whole) | none | `agent_key` |
 | `dim_product` | Yes | none | `product_key` |
 | `dim_lead_nopii` | Yes, keeps its name | `created_date`, `region_code`, `campaign_id`, `channel_code` (the dimensions own them) | `lead_key`, `age_band_sort` |
@@ -167,8 +167,12 @@ names the axis). Leave out blank and `Unknown` categories unless stated.
    CA has 1 Trainee; US has 2 Core and 2 Senior. Sliced by region, or seen by a
    `Regional_Analyst` limited to one region, a bar can be one or two named people's
    results. That is tier 2 HR performance data, and too few agents for a stable rate.
-   Keep region off this visual. At step 17, decide whether to blank bars with fewer
-   than 3 agents.
+   Keep region off this visual. **Hide small groups (decided):** add the helper
+   `Agents in Group` to the visual's filters as a visual-level filter, set to "is greater
+   than or equal to 3". A band then shows only with at least 3 distinct agents behind it,
+   including under a region slicer or RLS. The helper counts `dim_agent[agent_id]`
+   through `fact_call`, because `dim_agent_seniority` does not filter `dim_agent`
+   directly. It is not a KPI and adds no second conversion measure.
 4. **Distribution of time to first call.** Clustered column chart. X axis:
    `fact_lead_funnel[first_call_bucket]` (sorted by `first_call_bucket_sort`; 0-15 min,
    15-30 min, 30-60 min, 1-4 h, 4-24 h, over 24 h). Y axis: `Leads (Deduplicated)`. Filter

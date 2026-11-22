@@ -149,6 +149,13 @@ pytest
   `fact_lead_funnel` carries `lead_created_date_key` and `first_call_bucket`, so the
   model needs no Power Query merge or staging query.
 - **Policy status (assumption 3):** exclude NTU only; cancelled and lapsed policies count.
+- **`seniority_band` stays in `gold.dim_agent`** (tier 2): the SCD2 versions of AG0008
+  and AG0037 differ only by it after the defect 27 fix. Power Query removes it from the
+  model's `dim_agent`.
+- **Small seniority groups:** the seniority visual has a visual-level filter
+  `Agents in Group >= 3` (helper measure, not a KPI; no second conversion measure, one
+  certified measure per KPI). Region stays off that visual. The helper counts
+  `dim_agent[agent_id]` through `fact_call`, because the two agent tables are not related.
 
 ## Reference implementation (read-only)
 

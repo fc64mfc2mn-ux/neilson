@@ -185,6 +185,17 @@ DEFINE
         RETURN
             IF ( NOT ISBLANK ( TargetCpl ) && NOT ISBLANK ( Cpl ), Cpl - TargetCpl )
 
+    // ==== [helper] Agents in Group
+    // Description: Distinct agents behind the current selection, counted through their
+    //   calls. Not a KPI. The agent-seniority visual has a visual-level filter
+    //   Agents in Group >= 3, so a band backed by one or two people (tier 2 HR
+    //   performance data) is hidden. It adds no second conversion measure.
+    // Folder: 9. Visual helpers | Format: #,0
+    MEASURE 'Measures'[Agents in Group] =
+        // dim_agent and dim_agent_seniority are not related: the fact_call table filter
+        // carries the seniority (and region, RLS) filter to dim_agent through the calls.
+        CALCULATE ( DISTINCTCOUNT ( dim_agent[agent_id] ), fact_call )
+
 // Core measures for the whole dataset, by region and by month: compare with
 // powerbi/expected_values.csv.
 EVALUATE

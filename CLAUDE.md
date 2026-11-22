@@ -213,4 +213,6 @@ Decisions slice after step 12 done (policy GBP coverage, attribution window not 
 null `lead_key` for unresolvable call leads, open questions a to i).
 Step 13 done: the six named tests (legacy skipped until step 14), `src/dq_gate.py` with
 expected error lines in config (602 per run), CI with lint, fast tests, pipeline and gate.
-Next: step 14 of `docs/PLAN.md`.
+Step 15 done (CSV export to `export/powerbi/`, the pipeline's last stage) and step 14 done
+(legacy port: naive and corrected Spark SQL, `docs/LEGACY_PORT.md`, parity test un-skipped).
+Next: step 16 of `docs/PLAN.md` (Power BI model).

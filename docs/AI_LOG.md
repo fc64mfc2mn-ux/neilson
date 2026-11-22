@@ -542,3 +542,24 @@ compare the year 2026 with AU postcodes, so the test reads each file with its go
 schema (and FAILFAST, so a value that does not parse back fails). (2) Spark's CSV
 writer gives part files in no fixed order, so the export sorts rows and writes one file
 itself. (3) An edit script left a mis-sorted import in the runner; ruff caught it.
+
+### 2026-11-22  Step 14: legacy port of sp_MarketingLeadSummary
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, opening): "Step 14 is approved: the legacy port (PLAN.md step 14)."
+What it produced: a naive literal translation on raw data and a corrected port on gold
+(`src/sql/`), run by `src/legacy_port.py` with GETDATE() as the `as_of` parameter
+(default 2026-06-30 00:00:00); `src/sql/findings_legacy.sql` (7 named queries);
+`tests/test_legacy_parity.py`, un-skipped: 8 fixture tests (one per difference) and 7
+real-data tests; `docs/LEGACY_PORT.md` with 11 differences, each with cause, query,
+number and impact.
+Checked against the SQL, not taken from the prompt: (1) the prompt expected naive
+conversion above 100%; it can (fixture), but on this data the top is 34.7%. (2) It
+suggested the channel join drops "DISPLAY " and "display"; the procedure never reads
+campaigns, and spend and lead codes are clean, so 0 rows here (9 campaign rows carry
+variants: latent). (3) "Summed across currencies": each region has one currency, so no
+group mixes them; the flaw is local currency across regions. (4) DEAD and NULL statuses:
+none in the data. Found in addition: the DECIMAL(9,6) cast overflows in 2 groups, so the
+real procedure would fail on SQL Server; a run on the submission date sees no spend; a
+07:00 run drops 1 April; minor-unit rows inflate UK and AU spend 13x and 16x.
+Mistakes caught: a `${...}` in an SQL comment broke `string.Template`; a wait loop
+matched ruff's "All checks passed!" instead of pytest's summary.

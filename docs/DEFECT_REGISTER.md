@@ -10,11 +10,11 @@ settles it is named); **Finding** (written up for the owner, data not changed).
 | --- | --- | --- | --- | --- |
 | 1 | Starter config declares `sep: ";"` for `calls_ca_us` | File has no semicolons; comma-delimited | Fix config; record as a finding | Decided (fix at step 3) |
 | 2 | `lead_id` primary-key violations | 3 ids appear twice, with `CMP-1099` and `conflict.` emails | Quarantine both rows; do not silently resolve | Decided |
-| 3 | Near-duplicate leads | 480 flagged; deriving by email or phone within 48h finds 757; flag covers about 97% | Rule-based map in `lead_dedup_map`; earliest lead survives | Decided |
+| 3 | Near-duplicate leads | 480 flagged. The rule finds 758: 478 agree with the flag, 1 is reversed (the "duplicate" came first), 1 shares no key, 279 the source never flagged (`findings_leads.sql`) | Rule-based map in `lead_dedup_map`; earliest lead survives (assumption 19) | Decided |
 | 4 | Leads with no identity key | 935 null email, 295 null phone, 35 both null | Fallback key; quarantine the 35 | Decided |
 | 5 | Orphan campaign ids on leads | 310 on `CMP-9999`, 3 on `CMP-1099` | Map to `UNKNOWN` campaign; log exception | Decided |
-| 6 | Leads outside the reporting window | 10 created 1 to 2 Jul 2026 | Keep in silver; exclude from period measures | Decided |
-| 7 | Junk dates of birth | 20 before 1920; 292 after 2008, some in 2027 | Quarantine or null before computing age band | Decide at step 7: count junk-DOB leads that are otherwise valid, to choose between nulling the DOB and quarantining the lead |
+| 6 | Leads outside the reporting window | 10 created 1 to 2 Jul 2026; all 10 are deduplicated into June survivors (`july_leads`) | Flagged, never quarantined; in `lead_dedup_map`, not `silver.lead` | Decided |
+| 7 | Implausible dates of birth | Rule: age at creation under 18 or over 100. 60 nulled: before 1920, 20 of 20; 2008 to today, 20 of 272; future, 20 of 20. The other 252 (born 2008, aged 18) are valid (`dob_register_bands`) | DOB nulled, lead kept | Decided (assumption 18) |
 | 8 | Channel label variants | 17 spellings for 8 channels (`PaidSearch`, `SOCIAL_PAID`, `DISPLAY `) | Mapping to `ref_channel` | Decided |
 | 9 | Campaign date errors | 2 campaigns end before start; 249 spend rows after end, 81 before start | Flag; spend still counts (log assumption) | Decided (assumption still to be written) |
 | 10 | Spend duplicates, negatives, zeros | 40 exact duplicate rows; 3 negatives; 204 zero days; 18 null clicks | Dedupe; negatives as adjustments or quarantine | Decided for duplicates and zeros. Negatives: decide at step 9, by checking whether each negative offsets a matching positive row (adjustment) or stands alone (quarantine) |
@@ -32,7 +32,7 @@ settles it is named); **Finding** (written up for the owner, data not changed).
 | 22 | Contradictory underwriting and status | 267 policies DECLINED yet INFORCE | Finding; confirm with PolicyCore owner | Finding |
 | 23 | Policy dates beyond the period | Starts run to 31 Jul; applications to 18 Jul | Expected by design; anchors matter | Decided |
 | 24 | Lead channel vs campaign channel | About 19% disagree before label cleanup (8,970 raw). Pipeline re-measure: 23,644 of 47,687 raw, 600 after normalisation; the pandas figure could not be reproduced | Campaign channel is the source of truth | Decided (assumption 4); the 600 leads are flagged at step 7 |
-| 25 | Consent integrity | 2,900 leads have events; 299 end WITHDRAWN yet 284 still show `consent_marketing = Y` | Governance finding; `consent_current` is the source of truth | Finding |
+| 25 | Consent integrity | 2,900 leads have events; 299 end WITHDRAWN yet 284 still show `consent_marketing = Y` | Governance finding; `consent_current` is the source of truth; both counts logged as flagged | Finding |
 | 26 | Calls after a DO_NOT_CALL disposition | 4,461 UK and AU calls on 2,897 leads | Candidate headline finding | Finding |
 | 27 | Agent team does not match region | The later roster rows for AG0008 (CA, `UK-Team-Alpha`) and AG0037 (AU, `UK-Team-Gamma`) name UK teams | Quarantine those team values in `silver.dq_exception`; keep the earlier team (assumption 8) | Decided |
 

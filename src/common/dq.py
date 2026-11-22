@@ -66,7 +66,13 @@ CHECK_DEFECTS: dict[str, int] = {
     "fx_rate_missing": 12,
     "agent_duplicate_version": 18,
     "agent_null_region": 18,
+    "lead_unidentifiable": 4,
+    "lead_near_duplicate": 3,
+    "lead_outside_period": 6,
+    "lead_dob_implausible": 7,
     "lead_campaign_channel_mismatch": 24,
+    "consent_latest_withdrawn": 25,
+    "consent_withdrawn_marketing_y": 25,
     "agent_team_region_mismatch": 27,
 }
 

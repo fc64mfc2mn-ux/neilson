@@ -72,3 +72,13 @@ def real_bronze(spark, tmp_path_factory) -> BronzeRun:
     first = ingest_all(spark, config)
     second = ingest_all(spark, config)
     return BronzeRun(config, first, second)
+
+
+@pytest.fixture(scope="session")
+def real_reference(spark, real_bronze):
+    """Step 6 silver tables built once on the real bronze, with their own run id."""
+    from src.silver.reference import build_reference
+
+    config = {**real_bronze.config, "run_id": "test-silver"}
+    results = {r.table: r for r in build_reference(spark, config)}
+    return config, results

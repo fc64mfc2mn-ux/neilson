@@ -261,3 +261,74 @@ edit script failed against text ruff had reformatted; re-read the file and re-ap
 Note: an existing local lakehouse keeps its old batches without `_source_row`, because
 the file fingerprints are unchanged. Delete `lakehouse/` once to pick it up.
 Test time is now a real problem: the step 6 test file takes about 5.5 minutes.
+
+### 2026-11-21  Step 7: silver leads and consent
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): tests first; reconcile by distinct lead_id
+(47,997 = 47,201 + 758 + 35 + 3); quarantine PK conflicts and unidentifiable leads
+(error); dedup map by the 48h rule compared with the source flag in findings SQL; decide
+defect 7 on evidence; flag July leads, channel mismatches and the consent findings.
+What it produced:
+- `src/silver/dedupe_leads.py` (chained 48h links across email and digits-only phone;
+  union-find over about 800 links on the driver; earliest survives; one map row per lead,
+  survivors self-mapped, which the brief's named test requires). `resolve_consent.py`
+  (latest event per lead; phone flag from the latest PHONE event). `leads.py` (checks in
+  order, `LeadReconciliation`, both identities asserted in code).
+- `findings_leads.sql`: id reconciliation, source flag vs rule (480 flagged: 478 agree,
+  1 reversed, 1 shares no key; 279 found only by the rule), DOB groups, 2008 births,
+  withdrawn consent (299 / 284), July leads.
+- Tests: the named `test_dedupe_leads_collapses_clusters`, plus 4 dedup unit tests, plus
+  `test_silver_leads.py` (4 unit, 8 slow on real data). Confirmed failing first.
+Numbers: 48,000 rows / 47,997 ids -> 47,201 survivors + 758 mapped + 35 unidentifiable +
+3 PK ids; 41 rows quarantined (35 + 6, both rows of each PK id); 60 DOBs nulled; 10 July
+leads flagged; 600 channel mismatches flagged; consent 2,900 leads, 299 latest WITHDRAWN,
+284 still Y on the lead record.
+What was wrong or changed, and how I caught it:
+- My test assumed the 10 July leads survive into silver.lead. The run showed 0: all 10
+  are duplicates of late-June leads within 48h, so they map to June survivors. The test
+  was wrong, not the code; it now asserts the mapping, with a findings query.
+- The register's "292 after 2008" DOB count was misleading: 252 of them are 2008 births
+  aged 18 and valid. The real junk is 60. Register corrected.
+- Probing before coding showed that anchoring each 48h window on the cluster's first lead
+  gives 757 and chaining gives 758, which explains the "757 to 758" in the brief. Digits-only
+  and E.164 phone normalisation gave the same clusters in the probe; digits-only was kept
+  as the simpler rule. (The probe was a scratch script, so no quoted document number
+  depends on it.)
+- Caught before running: `F.array()` has element type null, so the consent phone filter
+  needed a cast.
+Open: the suite is slow (the step 7 file alone takes about 9 minutes). ASSUMPTIONS.md is
+about 1,330 words.
+Additions before commit (human review): ASSUMPTIONS 18 now states the exact rule and why
+60 are nulled, not the register's ~312, with counts per register band from the named
+query `dob_register_bands`: before 1920, 20 of 20; 2008 to today, 20 of 272; future,
+20 of 20. Nulling was extracted into `null_implausible_dob`, with a unit test written
+first: a lead aged 17 at creation keeps its row with DOB nulled, and an 18th birthday on
+the creation day keeps its DOB. Register rows 6 and 7 rewritten to one current
+statement each.
+More mistakes:
+- Step 7 was built, but not committed, before a later human message ("docs update
+  before step 7 ... do not start step 7") arrived. The docs commit was made from staged
+  hunks only, and step 7 waited for "go".
+- The RLS entry the human asked for took number 17, so my uncommitted step 7 entries
+  were renumbered to 18 and 19, with their references in the register and in
+  `leads.py`. Checked with grep.
+
+### 2026-11-21  Docs: SCD2 scope and RLS design (commit 94dea39)
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): docs only; record the SCD2 scope (gold.dim_agent only; silver.agent
+undated, windows at step 10 in `_source_row` order) and the RLS design
+(gold.bridge_user_region as the single source; Power BI role at step 17; UC row filter
+on region_key plus a no-PII mask at step 20; ALL = unrestricted; unmapped = no rows;
+the limits to state in platform_architecture.md) in PLAN.md and CLAUDE.md, plus one
+ASSUMPTIONS entry of at most 60 words.
+What it produced: three short bullets in CLAUDE.md's decisions section; a short
+"design decisions" block in PLAN.md; ASSUMPTIONS 17 (53 words). Because ASSUMPTIONS.md
+also held uncommitted step 7 hunks, the commit was staged with `git apply --cached` and
+a one-hunk patch (HEAD plus entry 17), and the staged diff was reviewed before
+committing. Pushed 4d867eb..94dea39, which also published the earlier unpushed local
+commits (steps 5 and 6, the register and DQ fixes, `_source_row`). `git ls-files`
+showed no secrets.json and no lakehouse/ paths.
+Not done: platform_architecture.md itself (step 21); the limits are recorded as
+something it must state.
+Mistake: `git status` was not clean after the commit, as requested, because the step 7
+work was still in the tree. Reported rather than hidden.

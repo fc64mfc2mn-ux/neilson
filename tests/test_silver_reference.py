@@ -13,7 +13,6 @@ from src.common.findings import run_finding
 from src.common.tables import read_table
 from src.silver.reference import (
     UNKNOWN_CAMPAIGN_ID,
-    build_reference,
     conform_agents,
     conform_campaign_id,
     conform_campaigns,
@@ -185,14 +184,6 @@ def test_conform_agents_keeps_versions_and_fixes_region_and_team(spark):
 
 
 # ------------------------------------------------------------------ real data
-
-
-@pytest.fixture(scope="module")
-def real_reference(spark, real_bronze):
-    # Own run id, so other modules building silver on the same bronze never mix exceptions.
-    config = {**real_bronze.config, "run_id": "test-silver-reference"}
-    results = {r.table: r for r in build_reference(spark, config)}
-    return config, results
 
 
 def _reconciles(spark, config, result):

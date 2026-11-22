@@ -132,3 +132,15 @@ confirm or overturn. The query and the result will be recorded against the entry
     `gold.bridge_user_region` drives both the Power BI role and the Unity Catalog row
     filter, matched on `region_key`; `ALL` is unrestricted, unmapped users see nothing.
     *Reason:* one source, star schema kept. *Reverse:* edit the bridge.
+
+18. **Implausible dates of birth.** *Ambiguity:* the register flags about 312 DOBs.
+    *Options:* quarantine the lead; null the DOB. *Choice:* null a DOB when the whole-year
+    age at lead creation is under 18 or over 100; keep the lead. That nulls 60: before
+    1920, 20 of 20; 2008 to today, 20 of 272 (the other 252 were born in 2008 and are
+    18); future, 20 of 20 (`dob_register_bands`). *Reason:* the leads are otherwise
+    normal. *Reverse:* `MIN_AGE`/`MAX_AGE` in `src/silver/leads.py`.
+
+19. **Dedup detail.** *Ambiguity:* "within 48 hours" of the previous match or of the
+    first lead; phone formats vary. *Choice:* chained gaps, linked across email and phone;
+    phone compared on digits only. *Reason:* gives 758 duplicates and 47,201 survivors.
+    *Reverse:* `src/silver/dedupe_leads.py`.

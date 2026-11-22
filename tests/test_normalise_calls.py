@@ -157,3 +157,27 @@ def test_unparseable_timestamp_is_null_not_guessed(spark):
     )
     out = by_id(normalise_calls(uk, ca))
     assert out["S"].call_start_ts_utc is None and out["M"].call_start_ts_utc is None
+
+
+def test_ambiguous_dst_hour_on_5_april_takes_the_earlier_offset(spark):
+    """Sydney DST ended 5 April 2026 at 03:00 AEDT: local 02:00 to 02:59 happens twice.
+
+    Spark (java.time) resolves the repeated hour to the earlier offset, AEDT +11, so
+    UTC 16:00 to 16:59 on 4 April is never produced. The real AU call in that hour,
+    CL-00038707 (stored 01:57:25 to 02:19:57, duration_seconds 1,352), fits only that
+    reading: with +10 for the end it would last 1 h 22 min.
+    """
+    uk, ca = frames(
+        spark,
+        [
+            uk_au_row("before", "AU", "2026-04-05T01:59:00Z", "2026-04-05T02:19:57Z", "1257"),
+            uk_au_row("overlap", "AU", "2026-04-05T02:27:18Z", "2026-04-05T02:28:34Z", "76"),
+            uk_au_row("after", "AU", "2026-04-05T03:00:00Z", "2026-04-05T03:01:00Z", "60"),
+        ],
+        [],
+    )
+    out = by_id(normalise_calls(uk, ca))
+    assert out["before"].call_start_ts_utc == "2026-04-04 14:59"
+    assert out["before"].call_end_ts_utc == "2026-04-04 15:19"  # same +11 offset
+    assert out["overlap"].call_start_ts_utc == "2026-04-04 15:27"
+    assert out["after"].call_start_ts_utc == "2026-04-04 17:00"  # AEST +10 from 03:00

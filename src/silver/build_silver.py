@@ -16,11 +16,13 @@ from pyspark.sql import SparkSession
 from src.common.dq import StageResult, ensure_dq_table
 from src.silver.calls import build_calls
 from src.silver.leads import build_consent, build_leads
+from src.silver.policy import build_policy
 from src.silver.reference import build_reference
+from src.silver.spend import build_spend
 
 
 def build_silver(spark: SparkSession, config: dict) -> list[StageResult]:
-    """Build silver in dependency order. Later plan steps add policy and spend."""
+    """Build silver in dependency order. Steps 6 to 9."""
     ensure_dq_table(spark, config)
     results = build_reference(spark, config)
     leads = build_leads(spark, config)
@@ -31,13 +33,33 @@ def build_silver(spark: SparkSession, config: dict) -> list[StageResult]:
             leads.rows_in,
             leads.map_rows,
             leads.rows_quarantined,
-        )  # fmt: skip
+        )
     )
     results.append(build_consent(spark, config))
     calls = build_calls(spark, config)
     results.append(
         StageResult(
             "silver.call", "bronze.calls_raw", calls.rows_in, calls.rows_out, calls.rows_quarantined
+        )
+    )
+    policy = build_policy(spark, config)
+    results.append(
+        StageResult(
+            "silver.policy",
+            "bronze.policies_raw",
+            policy.rows_in,
+            policy.rows_out,
+            policy.rows_quarantined,
+        )
+    )
+    spend = build_spend(spark, config)
+    results.append(
+        StageResult(
+            "silver.marketing_spend",
+            "bronze.marketing_spend_raw",
+            spend.rows_in,
+            spend.rows_out,
+            spend.rows_quarantined,
         )
     )
     return results

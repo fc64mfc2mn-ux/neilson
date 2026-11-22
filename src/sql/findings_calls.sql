@@ -368,3 +368,22 @@ SELECT
     COUNT(DISTINCT lead_id) AS leads_distinct,
     (SELECT COUNT(DISTINCT lead_id) FROM silver.call WHERE after_do_not_call) AS leads_silver
 FROM flagged;
+
+-- name: au_dst_overlap_calls
+-- AU calls with a start or end in the repeated local hour on 5 April 2026 (02:00 to
+-- 02:59, DST end). Stored duration against duration_seconds: equal means start and end
+-- share one offset, so the earlier-offset (AEDT +11) reading Spark applies fits.
+SELECT call_id,
+    call_start_ts_utc AS stored_start, call_end_ts_utc AS stored_end,
+    CAST(duration_seconds AS INT) AS duration_seconds,
+    CAST(unix_timestamp(to_timestamp(call_end_ts_utc))
+         - unix_timestamp(to_timestamp(call_start_ts_utc)) AS INT) AS stored_diff_seconds
+FROM (
+    SELECT DISTINCT call_id, call_start_ts_utc, call_end_ts_utc, duration_seconds
+    FROM bronze.calls_raw
+    WHERE _source_file = 'calls_uk_au.csv' AND region_code = 'AU'
+      AND _ingest_ts = (SELECT MAX(_ingest_ts) FROM bronze.calls_raw
+                        WHERE _source_file = 'calls_uk_au.csv')
+      AND (call_start_ts_utc LIKE '2026-04-05T02:%' OR call_end_ts_utc LIKE '2026-04-05T02:%')
+)
+ORDER BY call_id;

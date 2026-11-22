@@ -110,6 +110,15 @@ calls:
   # Converted, but first calls still come about 8.5 h after the lead: flagged, open.
   residual_offset_regions: [AU]
 
+# Minor-unit spend (assumption 6, defect 11): a row whose CPM is at least ratio_threshold
+# times its currency's median CPM is divided by divisor if the result lands in
+# rescaled_band (times the median); otherwise it is quarantined as ambiguous.
+spend:
+  minor_units:
+    ratio_threshold: 20
+    rescaled_band: [0.5, 2.0]
+    divisor: 100
+
 lakehouse:
   local_root: lakehouse
   azure_root: abfss://lakehouse@nfsdatalakedev.dfs.core.windows.net

@@ -38,13 +38,14 @@ confirm or overturn. The query and the result will be recorded against the entry
    (22 to 45 elsewhere): flagged as an open observation, not corrected. *Reverse:*
    `calls.source_timezone` in config. Queries: `src/sql/findings_calls.sql`.
 
-6. **Minor-unit spend (pending evidence).** *Ambiguity:* some GBP and AUD spend rows sit
-   far above their campaign's median, consistent with pence or cents. *Options:* keep;
-   divide by 100; quarantine. *Choice:* divide by 100 where the ratio to the median
-   clearly fits that rule; quarantine the ambiguous rows. *Reason:* left as they are,
-   they distort CPL badly. *Evidence needed:* the ratio distribution, to set the
-   threshold. *Reverse:* change or disable the rule; every affected row is logged in
-   `silver.dq_exception`.
+6. **Minor-unit spend.** *Ambiguity:* some spend sits about 100x too high. *Options:*
+   keep; divide by 100; quarantine. *Evidence:* two whole campaigns, CMP-1061 (AUD) and
+   CMP-1062 (GBP), have median CPM 92x and 99.8x their currency's; every other campaign
+   is 0.88 to 1.05x. Their CPC is 100x too, but click-through is normal, so spend is the
+   wrong field. *Rule:* a row with CPM 20x or more its currency median is divided by 100
+   if the result is 0.5 to 2x; otherwise quarantined as ambiguous. 181 rescaled, none
+   ambiguous (normal rows reach 1.51x, minor rows start at 68x). Blended CPL: £319.95
+   before, £34.39 after. *Reverse:* `spend.minor_units` in config.
 
 7. **Missing CAD rate for June.** *Options:* carry May forward; average the months;
    quarantine. *Choice:* quarantine CAD June spend at error severity, so the DQ gate
@@ -149,3 +150,20 @@ confirm or overturn. The query and the result will be recorded against the entry
     PK-conflict or out-of-period lead, and no policy links to them. The calls are real
     agent work for handle time and grade of service; they cannot enter the lead-grain
     funnel either way. *Reverse:* quarantine the flagged rows in `src/silver/calls.py`.
+
+21. **Negative, zero and click-less spend (defect 10).** *Negatives (3):* none offsets a
+    positive of its campaign, each is that day's only row at under 0.3x the median:
+    quarantined, not netted. *Zeros (200):* kept; 91 are ORGANIC (no media cost), the
+    rest have tiny delivery; the 109 on paid channels are flagged. *Null clicks (17):*
+    kept as null, never 0, flagged; spend and impressions are present. *Reverse:*
+    `src/silver/spend.py`.
+
+22. **Spend outside campaign dates (defect 9).** *Choice:* the spend counts and is
+    flagged (325 rows), because the media cost was incurred whatever the plan said; two
+    campaigns end before they start. *Reverse:* a measure filter on
+    `outside_campaign_dates`.
+
+23. **Conflicting policy copies (defect 19).** *Choice:* merge; the earliest copy wins a
+    value conflict, a null is filled from the other copy. *Reason:* the earliest matches
+    the linked call's agent (1 of 1) and monthly x 12 (2 of 3; the later copy 0 of 3).
+    *Reverse:* `merge_conflicting` in `src/silver/policy.py`.

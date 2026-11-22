@@ -392,3 +392,30 @@ the human (194e524), so it could not be included in this slice.
 Mistakes caught: the before-lead gap test kept the as-stored minimum (40 min); after
 conversion it is 120 min (that call was AU, so it moved 10 h). The slow test failed
 and was corrected from the query; the register text was fixed with it.
+
+### 2026-11-22  Step 9: silver policy and spend (defects 9 to 12, 19 to 23, new 28)
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): policy dedupe and coalesce with logged conflicts, null leads flagged,
+annual premium derived, DECLINED-yet-INFORCE as a finding; spend: account for all 223
+removed rows, test the minor-unit evidence and set a rule, decide negatives, zeros and
+null clicks, quarantine CAD June, flag campaign-date errors, GBP by month; explain the
+ambiguous DST hour on 5 April with a test.
+What it produced: `src/silver/policy.py`, `src/silver/spend.py`, findings_policy.sql
+(5 queries), findings_spend.sql (7), 9 fast and 16 slow tests written first and
+confirmed failing; a DST unit test and query; a `spend.minor_units` config block;
+assumption 6 rewritten, 21 to 23 added; register rows 9 to 12 and 19 to 22; defect 28.
+Results: policy 5,200 = 5,172 + 12 + 16. Spend 2,224 = 2,001 + 40 copies + 180 CAD
+June + 3 negatives. 181 minor-unit rows rescaled (two whole campaigns); CPL 319.95 ->
+34.39 GBP. The full pipeline ran end to end once (all silver tables reconcile).
+Findings beyond the prompt: "4 missing FX rows" in the notes is not supported (180
+distinct CAD June rows; 7 copies). Minor units are whole campaigns, so a per-campaign
+median test finds nothing; the rule uses CPM against the currency median. Six rows
+have clicks above impressions (defect 28): the impressions are wrong, the spend is not.
+CLAUDE.md's calls line was already fixed and committed by the human (30de5ff).
+Mistakes caught: (1) a test comment claimed 4 of the 40 copies were CAD June; the
+profile said 7; corrected before running. (2) A guessed band count (1,784) was typed
+into a test; replaced with the derived 1,614 before running. (3) Bounds of 0.9 to 1.1
+and 95 to 105 on the campaign CPM evidence were guesses; the slow test failed (0.878;
+CMP-1061 92x) and the bounds were set from the query. (4) A register phrase claiming
+the first campaign-date counts included copies was unverified; removed. (5) The
+register quoted 190 off-ratio premiums from raw rows; silver gives 187, now pinned.

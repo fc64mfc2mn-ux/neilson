@@ -83,6 +83,19 @@ CHECK_DEFECTS: dict[str, int] = {
     "call_lead_quarantined": 17,
     "call_agent_not_found": 17,
     "call_after_do_not_call": 26,
+    "policy_exact_duplicate": 19,
+    "policy_conflicting_duplicate": 19,
+    "policy_lead_missing": 20,
+    "policy_annual_premium_derived": 21,
+    "spend_exact_duplicate": 10,
+    "spend_negative": 10,
+    "spend_zero_paid_channel": 10,
+    "spend_clicks_missing": 10,
+    "spend_minor_units_rescaled": 11,
+    "spend_minor_units_ambiguous": 11,
+    "spend_fx_rate_missing": 12,
+    "spend_outside_campaign_dates": 9,
+    "spend_clicks_exceed_impressions": 28,
 }
 
 

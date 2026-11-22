@@ -347,3 +347,13 @@ def test_finding_do_not_call_reconciliation(spark, real_calls):
     assert r.flagged_distinct - r.flagged_silver == 38 + 63 + 15
     # Leads, all four regions combined.
     assert (r.leads_distinct, r.leads_silver) == (4_286, 4_223)
+
+
+@pytest.mark.slow
+def test_finding_au_dst_overlap_calls(spark, real_calls):
+    rows = {r.call_id: r for r in run_finding(spark, FINDINGS, "au_dst_overlap_calls")}
+    assert set(rows) == {"CL-00038707", "CL-00039376"}
+    # Stored duration equals duration_seconds for both: start and end share an offset.
+    assert {k: (r.stored_diff_seconds, r.duration_seconds) for k, r in rows.items()} == {
+        "CL-00038707": (1_352, 1_352), "CL-00039376": (76, 76)
+    }  # fmt: skip

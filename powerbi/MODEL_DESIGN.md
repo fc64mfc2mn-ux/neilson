@@ -17,37 +17,34 @@ Row counts are asserted in `tests/test_gold_facts.py` and `tests/test_gold_dimen
 | `dim_region` | Yes | `timezone`, `business_hours_start`, `business_hours_end` | `region_key` |
 | `dim_channel` | Yes | none | `channel_key` |
 | `dim_campaign` | Yes | none | `campaign_key`, `channel_code`, `region_code`, `product_code` |
-| `dim_agent` | Yes | `seniority_band` (decided), `source_row` | `agent_key`; `agent_id` is tier 2, step 17 hides it |
+| `dim_agent` | Yes | `seniority_band` (it comes from `dim_agent_seniority`), `source_row` | `agent_key`; `agent_id` is tier 2, step 17 hides it |
+| `dim_agent_seniority` | Yes: `agent_key`, `seniority_band` (tier 2, its own table so step 17's object-level security can hide it whole) | none | `agent_key` |
 | `dim_product` | Yes | none | `product_key` |
 | `dim_lead_nopii` | Yes, keeps its name | `created_date`, `region_code`, `campaign_id`, `channel_code` (the dimensions own them) | `lead_key`, `age_band_sort` |
-| `fact_lead_funnel` | Yes | `policy_key`, `policy_start_date_key`, `annual_premium_gbp`, `days_lead_to_policy` (policies come from `fact_policy`) | every key |
+| `fact_lead_funnel` | Yes | `policy_key`, `policy_start_date_key`, `annual_premium_gbp`, `days_lead_to_policy` (policies come from `fact_policy`) | every key, `first_call_bucket_sort` |
 | `fact_policy` | Yes | `call_id`, `call_key`, `lead_match_status` | keys, `policy_id`, local amounts, `rate_to_gbp`, `counts_as_sale` |
 | `fact_call` | Yes | `source_file` | keys, `call_id`, `lead_match_status` |
 | `fact_marketing_spend_daily` | Yes | none | keys, `spend_local`, `rate_to_gbp` (local currencies do not add up) |
-| `fact_lead` | Staging only: **Enable load off** | none | n/a |
 | `Target CPL` | DAX table (below) | n/a | none |
 | `Measures` | Empty table for the measures | n/a | its placeholder column |
 
-Not imported: `dim_lead` (hashes and health flags stay out of the model), `bridge_lead_call`
-(the funnel already holds call counts per lead; the bridge would need many-to-many),
-`bridge_user_region` (step 17).
+Not imported: `dim_lead` (hashes and health flags stay out of the model), `fact_lead`
+(`fact_lead_funnel` has the same grain and keys), `bridge_lead_call` (the funnel already
+holds call counts per lead; the bridge would need many-to-many), `bridge_user_region`
+(step 17).
 
-**Power Query merges** (left outer, on `lead_key`, from the `fact_lead` staging query):
-
-- `fact_lead_funnel` gets `lead_created_date_key`.
-- `fact_policy` gets `lead_created_date_key`, `campaign_key`, `channel_key`, so lead-linked
-  policies follow the lead's date and first-touch campaign. Policies with no lead get
-  blanks and drop out of the lead measures.
-
-This merge is the only logic in Power Query. `findings_powerbi.sql` copies it as a join
-on `fact_lead`. Moving these columns into gold is the reversal route.
+**No Power Query merges.** Gold carries every key the model filters on. `fact_policy` has
+the lead's `lead_created_date_key`, `campaign_key` and `channel_key` (null for the 405
+policies without a lead), so lead-linked policies follow the lead's date and first-touch
+campaign. `fact_lead_funnel` has `lead_created_date_key` and `first_call_bucket`. Power
+Query only types columns and removes them.
 
 **Data types.** Set them explicitly: use "Do not detect data types" on import, then set
 each type yourself.
 
 | Columns | Type |
 | --- | --- |
-| `*_key`, `*_date_key`, counts, seconds, `impressions`, `clicks`, `attempt_number` | Whole number (keys are 52-bit, exact) |
+| `*_key`, `*_date_key`, counts, seconds, `impressions`, `clicks`, `attempt_number`, `first_call_bucket_sort` | Whole number (keys are 52-bit, exact) |
 | `spend_gbp`, `annual_premium_gbp`, local amounts | Fixed decimal number |
 | `minutes_to_first_call`, `rate_to_gbp`, `qa_score` | Decimal number |
 | `date`, `month_start_date`, `valid_from`, `valid_to`, `start_date`, `end_date`, `application_date` | Date |
@@ -78,13 +75,18 @@ Turn off autodetect and create these by hand:
 | `dim_agent[agent_key]` | `fact_call[agent_key]`, `fact_policy[agent_key]` | Yes |
 | `dim_agent[agent_key]` | `fact_lead_funnel[last_call_agent_key]` | Yes |
 | `dim_agent[agent_key]` | `fact_lead_funnel[first_call_agent_key]` | No |
+| `dim_agent_seniority[agent_key]` | `fact_call[agent_key]`, `fact_policy[agent_key]`, `fact_lead_funnel[last_call_agent_key]` | Yes |
 | `dim_lead_nopii[lead_key]` | `lead_key` on funnel, policy, call | Yes |
 
 `dim_lead_nopii` to `fact_lead_funnel` is unique on both sides. Desktop will offer
 one-to-one, which filters both ways. Set it to many-to-one, single direction.
 
+`dim_agent_seniority` is also unique on `agent_key`, as `dim_agent` is. Do not relate the
+two to each other: each is a dimension of the facts.
+
 **Date table.** Mark `dim_date` as the date table on `date` (365 days, all of 2026). Sort
-`month_name` and `month_short` by `month`. Turn off Auto date/time for the file.
+`month_name` and `month_short` by `month`, and `fact_lead_funnel[first_call_bucket]` by
+`first_call_bucket_sort`. Turn off Auto date/time for the file.
 
 **Target CPL** (disconnected, no relationships). Create it with New table, not the What-if
 dialog: the dialog's measure has a default value, so "nothing selected" could not happen.
@@ -102,13 +104,14 @@ single-select slicer.
 
 ## What cannot be reproduced exactly, and limits
 
-The values for every core measure (whole dataset, region, month) can be reproduced from
+The values for every core measure (whole dataset, region, month, plus channel, seniority
+and first-call bucket where a visual uses them) and Cost Per Policy can be reproduced from
 gold. Expect differences only past the sixth decimal place: DAX divides in floating point,
 Spark in decimal, and the file rounds half-up to six places. Other limits:
 
 1. **Not in `expected_values.csv`.** `Cost Per Lead (GBP) MoM %` follows from the month
    rows (May on April). `CPL vs Target Variance (GBP)` depends on the slicer selection.
-   Stretch measures 4, 6, 8 and 10 have no expected rows yet.
+   Stretch measures 4, 6 and 8 have no expected rows yet.
 2. **Each measure uses its own date.** Spend uses the spend date, leads and lead-linked
    policies the lead-created date, calls the call date (calls run into July; spend and
    leads stop in June), and premium the policy-start date. A month's CPL compares that
@@ -120,8 +123,9 @@ Spark in decimal, and the file rounds half-up to six places. Other limits:
    leads and policies but not spend (spend has neither key). CPL and Cost Per Policy are
    wrong under those slicers; don't show them that way.
 5. **Funnel-only columns do not reach `fact_policy`.** Slicing on a `fact_lead_funnel`
-   column (for example `lead_in_business_hours_flag`) filters the denominator but not
-   the policies. Use `dim_lead_nopii` attributes, which filter both.
+   column (for example `lead_in_business_hours_flag` or `first_call_bucket`) filters the
+   denominator but not the policies. Use `dim_lead_nopii` attributes, which filter both.
+   Do not show conversion by first-call bucket.
 6. **Policy region and product.** Policies use their own `region_key` (equal to the
    lead's for all 4,767 linked policies; tested) and the product sold, not the lead's
    `product_interest`.
@@ -135,13 +139,41 @@ Spark in decimal, and the file rounds half-up to six places. Other limits:
 10. **Empty text.** The CSVs have no null marker, so empty text arrives as `""`, not
     blank. The `NTU` filter keeps both, and the SQL copies this with `COALESCE`.
 
-## Open for the human
+## The four visuals (one report page)
 
-- **Seniority visual (step 17).** The visual "agent seniority against conversion" needs
-  `seniority_band`, which is removed from `dim_agent`. My proposal is a separate table,
-  `dim_agent_seniority` (`agent_key`, `seniority_band`, from `dim_agent.csv`), related
-  like `dim_agent`. OLS can then hide the whole table from the two analyst roles. The
-  `agent_id` column could move there too.
+Each visual's numbers can be checked against `expected_values.csv` (the `slice` column
+names the axis). Leave out blank and `Unknown` categories unless stated.
+
+1. **Channel CPL against cost per policy.** Scatter chart. X axis: `Cost Per Lead (GBP)`.
+   Y axis: `Cost Per Policy (GBP)`. Values (one point per channel):
+   `dim_channel[channel_name]`. Size: `Leads (Deduplicated)`. Tooltips: `Marketing Spend
+   (GBP)`, `Lead to Policy Conversion Rate`. Check: `channel` rows of both cost measures.
+   Spend follows the spend date and policies the lead's date and channel (limit 2). Cost
+   per policy is stretch measure 10, built here because this visual needs it.
+2. **Funnel by region.** Line and clustered column chart. X axis:
+   `dim_region[region_name]`. Columns: `Leads (Deduplicated)` and `Policies Linked to
+   Surviving Leads`. Line (secondary axis): `Lead to Policy Conversion Rate`. Check:
+   `region` rows of leads and conversion (policies = conversion x leads).
+3. **Agent seniority against conversion.** Clustered column chart. X axis:
+   `dim_agent_seniority[seniority_band]`, filtered to Core, Senior and Trainee. Y axis:
+   `Lead to Policy Conversion Rate`. Tooltip: `Leads (Deduplicated)`. Check: `seniority`
+   rows: Core 16.3%, Senior 15.3%, Trainee 3.9%. Leads follow their last-call agent, and
+   policies their selling agent. These are the same agent for 4,626 of 4,767 lead-linked
+   policies (97.0%, `seniority_attribution_agreement`). Leads never called have no
+   seniority and fall in the blank bar, but the policies of 42 of them still count under
+   their seller's band.
+   **Small-group risk.** Current agents per region and band
+   (`agent_seniority_group_sizes`): AU has 6 Core and 2 Senior and no current Trainee;
+   CA has 1 Trainee; US has 2 Core and 2 Senior. Sliced by region, or seen by a
+   `Regional_Analyst` limited to one region, a bar can be one or two named people's
+   results. That is tier 2 HR performance data, and too few agents for a stable rate.
+   Keep region off this visual. At step 17, decide whether to blank bars with fewer
+   than 3 agents.
+4. **Distribution of time to first call.** Clustered column chart. X axis:
+   `fact_lead_funnel[first_call_bucket]` (sorted by `first_call_bucket_sort`; 0-15 min,
+   15-30 min, 30-60 min, 1-4 h, 4-24 h, over 24 h). Y axis: `Leads (Deduplicated)`. Filter
+   out blank (never called). Card beside it: `Time to First Call (Median Minutes)`.
+   Check: `first_call_bucket` rows of `Leads (Deduplicated)`.
 
 ## Build checklist (Windows VM)
 
@@ -155,20 +187,20 @@ Spark in decimal, and the file rounds half-up to six places. Other limits:
    uses it.
 4. Import each CSV in the table above with Text/CSV: UTF-8 (65001), comma delimiter, "Do
    not detect data types". Promote headers, set the types, remove the columns listed.
-5. Turn off Enable load for `fact_lead`. Add the two merges and expand only the named
-   columns.
-6. Close & Apply. Check the row counts: 365 dates, 47,201 funnel and lead rows, 62,829
-   calls, 5,172 policies, 2,001 spend rows.
-7. In Model view, delete any automatic relationships and create the table above. Set the
+5. Close & Apply. Check the row counts: 365 dates, 47,201 funnel rows, 62,829 calls,
+   5,172 policies, 2,001 spend rows, 46 agent and agent-seniority rows.
+6. In Model view, delete any automatic relationships and create the table above. Set the
    policy-start and first-call relationships to inactive.
-8. Mark the date table, and set the sort-by columns.
-9. Create the `Target CPL` table and the `Measures` table (Enter data, one placeholder
+7. Mark the date table, and set the sort-by columns.
+8. Create the `Target CPL` table and the `Measures` table (Enter data, one placeholder
    column).
-10. Paste `measures.dax` into DAX query view, run it, and add each measure to `Measures`.
-    Set each description, display folder and format from its comment block. Build the
-    helper measures first.
-11. Hide the keys and columns listed. Hide the placeholder column in `Measures`.
-12. Run the three `EVALUATE` queries at the end of `measures.dax`. Compare them with
+9. Paste `measures.dax` into DAX query view, run it, and add each measure to `Measures`.
+   Set each description, display folder and format from its comment block. Build the
+   helper measures first.
+10. Hide the keys and columns listed. Hide the placeholder column in `Measures`.
+11. Run the three `EVALUATE` queries at the end of `measures.dax`. Compare them with
     `expected_values.csv` (rates are fractions: 0.095316 is 9.53%). Screenshot the result
     into `powerbi/`.
+12. Build the four visuals below on one page. Compare each with its
+    `expected_values.csv` rows.
 13. Save as `powerbi/northgate_funnel.pbix`, and copy it back to the repo on the Mac.

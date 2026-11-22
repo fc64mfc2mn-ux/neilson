@@ -586,3 +586,21 @@ caught by the tests. (4) The first types table listed two columns that are not i
 Design points found by measuring, not assumed: one policy per surviving lead (why 4,499
 policies equal 4,499 converted leads); `fact_policy` has no campaign, channel or lead
 date, so Power Query merges them from `fact_lead`; unconnected calls carry talk time.
+
+### 2026-11-22  Step 16b: seniority table, lead keys in gold, visuals
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, opening): "Step 16b, before the human builds the model."
+What it produced: `gold.dim_agent_seniority`; `campaign_key`, `channel_key` and
+`lead_created_date_key` on `gold.fact_policy`; `lead_created_date_key` and
+`first_call_bucket` on `gold.fact_lead_funnel`; expected values for Cost Per Policy and
+CPL by channel, conversion by seniority, and lead counts per first-call bucket; the
+steps for the four visuals in `powerbi/MODEL_DESIGN.md`; CLAUDE.md status and decisions.
+Found while doing it: the funnel also needed `lead_created_date_key`, or the model would
+still need the staging query; the seniority visual mixes two agents (last-call agent for
+leads, selling agent for policies), so their agreement is measured and stated.
+Mistakes caught: two docstring edits joined lines past the length limit (ruff); fast tests
+run alongside the pipeline took 2.5 minutes, so the rest waited for the pipeline. The
+first full slow run had 16 failures and 7 errors, and I first read pytest's piped exit
+code 0 as a pass. Cause: since step 15, an empty-gold rebuild test deleted the whole
+shared test gold directory, after `test_export_powerbi` had built the facts there. Fixed
+by deleting only the dimension tables; the rerun has 103 passed.

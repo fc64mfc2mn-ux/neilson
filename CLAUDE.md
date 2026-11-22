@@ -140,6 +140,15 @@ pytest
 - **Tier 2 agent columns:** `agent_id` and `seniority_band` must be hidden from
   `Marketing_Analyst_NoPII` and `Regional_Analyst` at step 17 (decide there between
   object-level security and a separate agent table).
+- **Seniority table (step 16b):** `gold.dim_agent_seniority` (`agent_key`,
+  `seniority_band`, tier 2) is the separate table for the agent-seniority visual, so OLS
+  can hide it whole; `agent_id` stays in `dim_agent`. The model removes `seniority_band`
+  from `dim_agent` and imports `dim_lead_nopii`, never `dim_lead`.
+- **Lead keys in gold (step 16b):** `gold.fact_policy` carries the surviving lead's
+  `campaign_key`, `channel_key` and `lead_created_date_key` (null without a lead), and
+  `fact_lead_funnel` carries `lead_created_date_key` and `first_call_bucket`, so the
+  model needs no Power Query merge or staging query.
+- **Policy status (assumption 3):** exclude NTU only; cancelled and lapsed policies count.
 
 ## Reference implementation (read-only)
 
@@ -201,18 +210,14 @@ governance risks.
 
 ## Where things stand
 
-Steps 1 to 12 done: scaffold; assumptions and defect status; config, UTC session, runner;
-bronze (append-only, `_source_row`); DQ framework; silver reference tables; silver leads
-and consent; silver calls (AU converted, defect 17 kept and flagged, defect 26 flagged);
-silver policy and spend (spend minor units rescaled at 100, 180 CAD June rows
-quarantined); gold dimensions with a deterministic SCD2 `dim_agent` (1,139 call leads
-and 615 call agents resolve to UNKNOWN); PII policy with `gold.dim_lead` (47,201),
-`gold.dim_lead_nopii`; gold facts, both bridges and `fact_lead_funnel` (47,201), the PII
-scan as the last stage; the runner stops on any unbuilt or failing stage.
-Decisions slice after step 12 done (policy GBP coverage, attribution window not applied,
-null `lead_key` for unresolvable call leads, open questions a to i).
-Step 13 done: the six named tests (legacy skipped until step 14), `src/dq_gate.py` with
-expected error lines in config (602 per run), CI with lint, fast tests, pipeline and gate.
-Step 15 done (CSV export to `export/powerbi/`, the pipeline's last stage) and step 14 done
-(legacy port: naive and corrected Spark SQL, `docs/LEGACY_PORT.md`, parity test un-skipped).
-Next: step 16 of `docs/PLAN.md` (Power BI model).
+Steps 1 to 15 done (see `git log`): scaffold, config and runner, bronze, DQ framework,
+silver, gold dimensions (SCD2 `dim_agent`), PII policy, facts, bridges and
+`fact_lead_funnel` (47,201), the six named tests and DQ gate (602 error lines) in CI, the
+legacy port with its parity test, and the CSV export to `export/powerbi/`.
+Step 16 is prepared, not built: `powerbi/measures.dax` (all twelve measures),
+`powerbi/MODEL_DESIGN.md` (tables, relationships, the four visuals, the VM checklist) and
+`powerbi/expected_values.csv` from `python -m src.powerbi_expected --config
+config/config.yaml`, checked by `tests/test_powerbi_model.py`.
+Next: the human builds the model in Power BI Desktop on the VM and compares the values
+with `expected_values.csv`. Step 17 is RLS (`Regional_Analyst`), the four visuals and the
+view-as evidence. Step 18 is the Connected Call measure and the reconciliation.

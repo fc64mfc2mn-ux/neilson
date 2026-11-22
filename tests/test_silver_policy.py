@@ -85,6 +85,7 @@ def test_policy_checks_are_mapped():
         "policy_conflicting_duplicate": 19,
         "policy_lead_missing": 20,
         "policy_annual_premium_derived": 21,
+        "policy_premium_above_12x_monthly": 21,
     }.items() <= CHECK_DEFECTS.items()
 
 
@@ -126,6 +127,9 @@ def test_policy_dq_counts(spark, real_policy):
         # 620 raw null annual premium: 1 on an exact copy, 1 on a merged-away copy, 1
         # filled by coalescing: 617 derived as monthly x 12.
         "policy_annual_premium_derived": (617, "info", "corrected"),
+        # Supplied annual premium above 12 x monthly (by more than 0.01 per month):
+        # flagged for the PolicyCore owner, values unchanged (docs/OPEN_QUESTIONS.md).
+        "policy_premium_above_12x_monthly": (187, "warning", "flagged"),
     }
     for check, (rows, severity, action) in expect.items():
         got = _checks(spark, config, check)
@@ -195,3 +199,24 @@ def test_finding_lead_missing_trace(spark, real_policy):
     r = run_finding(spark, FINDINGS, "lead_missing_trace")[0]
     # 410 raw -> 406 once duplicate copies are removed -> 404 after coalescing fills 2.
     assert (r.raw_null, r.after_removing_copies, r.silver_null) == (410, 406, 404)
+
+
+@pytest.mark.slow
+def test_premium_flag_changes_no_value(spark, real_policy):
+    config, _ = real_policy
+    p = read_table(spark, config, "silver.policy")
+    flagged = _checks(spark, config, "policy_premium_above_12x_monthly").select(
+        F.col("key_value").alias("policy_id")
+    )
+    rows = p.join(flagged, "policy_id")
+    assert rows.count() == 187
+    assert rows.where("annual_premium_derived").count() == 0
+    # Still the supplied value: above 12 x monthly on every flagged row.
+    assert rows.where("annual_premium_local <= monthly_premium_local * 12.01").count() == 0
+
+
+@pytest.mark.slow
+def test_finding_premium_above_12x_monthly(spark, real_policy):
+    rows = run_finding(spark, FINDINGS, "premium_above_12x_monthly")
+    assert sum(r.policies for r in rows) == 187
+    assert min(r.min_ratio for r in rows) > 12.6 and max(r.max_ratio for r in rows) < 15

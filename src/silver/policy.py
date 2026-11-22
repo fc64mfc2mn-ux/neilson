@@ -12,6 +12,8 @@ Order on the latest bronze batch of policies.csv:
 3. Typing. Null `lead_id` (defect 20) is kept and flagged: those policies are
    excluded from lead-attributed measures later (assumption 11).
 4. Null annual premium (defect 21): derived as monthly x 12, action corrected.
+   A supplied annual premium above 12 x monthly (by more than 0.01 a month) is
+   flagged for the PolicyCore owner, values unchanged.
 
 Statuses are kept raw (INFORCE, LAPSED, NTU, CANCELLED): which count as
 converted is a measure decision. DECLINED-yet-INFORCE (defect 22) is a finding
@@ -207,6 +209,17 @@ def build_policy(spark: SparkSession, config: dict) -> PolicyReconciliation:
     )  # fmt: skip
     write_dq_exception(derived, "policy_annual_premium_derived", POLICY_SOURCE, "policy_id",
                        "info", config=config, action="corrected", detail_col="detail")  # fmt: skip
+    above = policies.where(
+        ~F.col("annual_premium_derived")
+        & (F.col("annual_premium_local") > F.col("monthly_premium_local") * 12.01)
+    ).withColumn(
+        "detail",
+        F.concat(F.lit("annual / monthly = "),
+                 F.round(F.col("annual_premium_local") / F.col("monthly_premium_local"), 2)
+                 .cast("string")),
+    )  # fmt: skip
+    write_dq_exception(above, "policy_premium_above_12x_monthly", POLICY_SOURCE, "policy_id",
+                       "warning", config=config, action="flagged", detail_col="detail")  # fmt: skip
     overwrite_table(spark, policies, config, "silver.policy")
 
     rec = PolicyReconciliation(

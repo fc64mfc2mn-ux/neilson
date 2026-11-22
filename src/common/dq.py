@@ -87,6 +87,7 @@ CHECK_DEFECTS: dict[str, int] = {
     "policy_conflicting_duplicate": 19,
     "policy_lead_missing": 20,
     "policy_annual_premium_derived": 21,
+    "policy_premium_above_12x_monthly": 21,
     "spend_exact_duplicate": 10,
     "spend_negative": 10,
     "spend_zero_paid_channel": 10,

@@ -139,3 +139,16 @@ SELECT
        AND CAST(_source_row AS BIGINT) NOT IN (SELECT source_row FROM removed))
         AS after_removing_copies,
     (SELECT COUNT(*) FROM silver.policy WHERE lead_id IS NULL) AS silver_null;
+
+-- name: premium_above_12x_monthly
+-- Open question (a): supplied annual premium above 12 x monthly (by more than 0.01 a
+-- month), by region and payment frequency. Flagged, values unchanged.
+SELECT region_code, payment_frequency, COUNT(*) AS policies,
+    MIN(CAST(annual_premium_local AS DOUBLE) / CAST(monthly_premium_local AS DOUBLE))
+        AS min_ratio,
+    MAX(CAST(annual_premium_local AS DOUBLE) / CAST(monthly_premium_local AS DOUBLE))
+        AS max_ratio
+FROM silver.policy
+WHERE NOT annual_premium_derived AND annual_premium_local > monthly_premium_local * 12.01
+GROUP BY region_code, payment_frequency
+ORDER BY region_code, payment_frequency;

@@ -419,3 +419,19 @@ and 95 to 105 on the campaign CPM evidence were guesses; the slow test failed (0
 CMP-1061 92x) and the bounds were set from the query. (4) A register phrase claiming
 the first campaign-date counts included copies was unverified; removed. (5) The
 register quoted 190 off-ratio premiums from raw rows; silver gives 187, now pinned.
+
+### 2026-11-22  Step 9 follow-up: defect 28 guard, premium flag, open questions
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): test that no clicks-above-impressions row is rescaled; flag the 187
+policies above 12 x monthly (warning, values unchanged); create docs/OPEN_QUESTIONS.md
+(six questions, each with its evidence query); update CLAUDE.md (status, spend result,
+DQ gate counts from the register, open questions file).
+What it produced: two tests and the `policy_premium_above_12x_monthly` check; three new
+evidence queries (`premium_above_12x_monthly`, `region_codes_by_source`,
+`ref_region_business_hours`) with tests; OPEN_QUESTIONS.md; CLAUDE.md and register row
+21 updated.
+Corrected on the way: question (c) was worded as "not in the pack", but `ref_region`
+does carry daily hours; the gap is the weekend and holiday rule, so the question says
+that. Owner names were first written loosely ("PolicyCore owner"); replaced with the
+brief's names (Finance Systems Manager, Operations Resource Planning Manager, Finance
+Treasury).

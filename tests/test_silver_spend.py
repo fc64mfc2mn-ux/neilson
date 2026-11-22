@@ -236,3 +236,12 @@ def test_finding_clicks_exceed_impressions(spark, real_spend):
     r = run_finding(spark, FINDINGS, "clicks_exceed_impressions")[0]
     # Spend on these rows is normal for the campaign; the impressions value is the error.
     assert (r.rows, r.max_spend_vs_campaign_median) == (6, 1.2)
+
+
+@pytest.mark.slow
+def test_clicks_exceed_impressions_rows_are_not_rescaled(spark, real_spend):
+    """Defect 28 rows are excluded from the minor-unit rule: none of the 6 is rescaled."""
+    config, _ = real_spend
+    s = read_table(spark, config, "silver.marketing_spend")
+    assert s.where("clicks > impressions").count() == 6
+    assert s.where("clicks > impressions AND minor_unit_rescaled").count() == 0

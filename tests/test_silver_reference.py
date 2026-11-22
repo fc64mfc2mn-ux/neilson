@@ -302,3 +302,19 @@ def test_evidence_lead_vs_campaign_channel(spark, real_reference):
     assert row.leads_with_known_campaign == 47_687
     assert row.disagree_raw == 23_644
     assert row.disagree_normalised == 600
+
+
+@pytest.mark.slow
+def test_evidence_no_ireland_region_in_any_source(spark, real_reference):
+    rows = run_finding(spark, FINDINGS, "region_codes_by_source")
+    assert {r.region_code for r in rows} == {"UK", "CA", "AU", "US"}
+    assert {r.source for r in rows} == {"ref_region", "leads", "campaigns", "spend"}
+
+
+@pytest.mark.slow
+def test_evidence_ref_region_hours_have_no_weekend_rule(spark, real_reference):
+    rows = {r.region_code: r for r in run_finding(spark, FINDINGS, "ref_region_business_hours")}
+    assert {k: (r.business_hours_start, r.business_hours_end) for k, r in rows.items()} == {
+        "UK": ("09:00", "20:00"), "CA": ("09:00", "21:00"),
+        "AU": ("09:00", "19:00"), "US": ("09:00", "21:00"),
+    }  # fmt: skip

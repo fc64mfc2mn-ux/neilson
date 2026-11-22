@@ -54,3 +54,27 @@ SELECT
         AS disagree_normalised
 FROM lead_norm ln
 JOIN silver.campaign c ON c.campaign_id = ln.campaign_id;
+
+-- name: region_codes_by_source
+-- Open question (f): region codes present in each source. No Ireland code anywhere,
+-- although the Marketing director's brief covers UK and Ireland.
+SELECT 'ref_region' AS source, region_code, COUNT(*) AS rows FROM bronze.ref_region_raw
+WHERE _ingest_ts = (SELECT MAX(_ingest_ts) FROM bronze.ref_region_raw) GROUP BY region_code
+UNION ALL
+SELECT 'leads', region_code, COUNT(*) FROM bronze.leads_raw
+WHERE _ingest_ts = (SELECT MAX(_ingest_ts) FROM bronze.leads_raw) GROUP BY region_code
+UNION ALL
+SELECT 'campaigns', region_code, COUNT(*) FROM bronze.campaigns_raw
+WHERE _ingest_ts = (SELECT MAX(_ingest_ts) FROM bronze.campaigns_raw) GROUP BY region_code
+UNION ALL
+SELECT 'spend', region_code, COUNT(*) FROM bronze.marketing_spend_raw
+WHERE _ingest_ts = (SELECT MAX(_ingest_ts) FROM bronze.marketing_spend_raw) GROUP BY region_code
+ORDER BY source, region_code;
+
+-- name: ref_region_business_hours
+-- Open question (c): ref_region gives daily start and end times per region, but no
+-- weekend or holiday rule; assumption 9 fills that gap.
+SELECT region_code, timezone, business_hours_start, business_hours_end
+FROM bronze.ref_region_raw
+WHERE _ingest_ts = (SELECT MAX(_ingest_ts) FROM bronze.ref_region_raw)
+ORDER BY region_code;

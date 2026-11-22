@@ -116,6 +116,9 @@ pytest
   row filter on each fact's `region_key` using the bridge, plus a column mask or no-PII
   view for `Marketing_Analyst_NoPII`. Region `ALL` = no restriction; unmapped user = no
   rows. No wide table: keep the star schema.
+- **DQ gate expected counts** come from the register, one line per defect with its test,
+  and are not copied from a run.
+- **Questions for data owners** live in `docs/OPEN_QUESTIONS.md`.
 - **Limits to state in `docs/platform_architecture.md`:** UC row filters cannot run in
   local Spark, so they are SQL tested against the entitlements matrix with fixtures only.
   Power BI Import with a shared service account does not pass the user's identity to UC;
@@ -141,8 +144,8 @@ order of `docs/PLAN.md` steps 4 onward. Known traps in it (each needs a test her
 - **DQ gate.** No zero threshold: about 675 error rows are expected. Gate on the expected
   count per defect, held in config, and fail only on a breach beyond it. Test a seeded
   breach (fails) and clean data (passes).
-- **Spend reconciliation.** 2,224 -> 2,001 rows: only 40 exact duplicates and 4 missing FX
-  explain part of it. Account for every row, with a reconciliation test.
+- **Spend reconciliation.** 2,224 = 2,001 kept + 40 exact copies + 180 CAD June rows + 3
+  negatives. The earlier "4 missing FX" claim was wrong.
 - **Minor-unit spend.** Record the evidence and the threshold in `ASSUMPTIONS.md`.
 
 ## Expected counts (independently verified)
@@ -180,7 +183,9 @@ governance risks.
 
 ## Where things stand
 
-Steps 1 to 8 done: scaffold; assumptions and defect status; config, UTC session, runner;
+Steps 1 to 9 done: scaffold; assumptions and defect status; config, UTC session, runner;
 bronze (append-only, `_source_row`); DQ framework; silver reference tables; silver leads
-and consent; silver calls (AU converted, defect 17 kept and flagged, defect 26 flagged).
-Next: step 9 of `docs/PLAN.md` (silver policy and spend).
+and consent; silver calls (AU converted, defect 17 kept and flagged, defect 26 flagged);
+silver policy and spend (spend minor units rescaled at 100, 180 CAD June rows
+quarantined).
+Next: step 10 of `docs/PLAN.md` (gold dimensions).

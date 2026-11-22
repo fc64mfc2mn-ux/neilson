@@ -332,3 +332,17 @@ Not done: platform_architecture.md itself (step 21); the limits are recorded as
 something it must state.
 Mistake: `git status` was not clean after the commit, as requested, because the step 7
 work was still in the tree. Reported rather than hidden.
+
+### 2026-11-22  Cost and speed: CLAUDE.md rules and Spark session settings
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (summary): write the cost and speed rules into CLAUDE.md, short; set
+shuffle.partitions=8, default.parallelism=8, ui.enabled=false and adaptive.enabled=true
+(configurable, UTC unchanged); test the session first; time the slow suite after.
+What it produced: CLAUDE.md "Cost and speed" section (90a1457), replacing the human's
+committed note (d7a22e9) with five short standing rules. `spark_session.py`:
+`DEFAULT_SETTINGS` plus `spark_settings(config)`, with an optional `spark:` block in
+config.yaml overriding them; the runner passes them to `get_spark`.
+`tests/test_spark_session.py` (2 tests), written first and confirmed failing.
+Timing, slow set (`pytest -m slow`, 30 tests): before 116 s (human's baseline),
+after 106.7 s. About 8% faster, from a single run each, so treat it as indicative.
+Most of the remaining time is bronze landing (many small Delta writes), not shuffles.

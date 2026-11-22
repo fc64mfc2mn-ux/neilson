@@ -10,8 +10,22 @@ from __future__ import annotations
 
 from pyspark.sql import SparkSession
 
+# Small local data: few shuffle partitions, adaptive execution, no Spark UI.
+# Override per run with a `spark:` block in config.yaml (see spark_settings).
+DEFAULT_SETTINGS = {"shuffle_partitions": 8, "default_parallelism": 8}
 
-def get_spark(app_name: str = "northgate-funnel", warehouse_dir: str = "lakehouse") -> SparkSession:
+
+def spark_settings(config: dict) -> dict:
+    """DEFAULT_SETTINGS overridden by the config's optional `spark:` block."""
+    return {**DEFAULT_SETTINGS, **config.get("spark", {})}
+
+
+def get_spark(
+    app_name: str = "northgate-funnel",
+    warehouse_dir: str = "lakehouse",
+    shuffle_partitions: int = DEFAULT_SETTINGS["shuffle_partitions"],
+    default_parallelism: int = DEFAULT_SETTINGS["default_parallelism"],
+) -> SparkSession:
     """Build (or fetch) a local SparkSession with Delta Lake configured.
 
     Args:
@@ -35,7 +49,10 @@ def get_spark(app_name: str = "northgate-funnel", warehouse_dir: str = "lakehous
         .config("spark.sql.warehouse.dir", warehouse_dir)
         # All timestamps are stored and compared in UTC, whatever the machine's zone.
         .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.sql.shuffle.partitions", "4")
+        .config("spark.sql.shuffle.partitions", str(shuffle_partitions))
+        .config("spark.default.parallelism", str(default_parallelism))
+        .config("spark.sql.adaptive.enabled", "true")
+        .config("spark.ui.enabled", "false")
         .config("spark.ui.showConsoleProgress", "false")
     )
 

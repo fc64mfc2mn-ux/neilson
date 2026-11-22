@@ -30,7 +30,7 @@ from src.common.config import (
     resolve_source_path,
 )
 from src.common.logging_setup import get_logger
-from src.common.spark_session import get_spark, stop_spark
+from src.common.spark_session import get_spark, spark_settings, stop_spark
 from src.gold.build_dimensions import build_dimensions
 from src.gold.build_facts import build_facts
 from src.gold.build_lead_funnel import build_lead_funnel
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     log.info("Environment=%s, %d sources configured", config["environment"], len(config["sources"]))
 
     config["run_id"] = run_id
-    spark = get_spark(warehouse_dir=resolve_lakehouse_root(config))
+    spark = get_spark(warehouse_dir=resolve_lakehouse_root(config), **spark_settings(config))
     spark.sparkContext.setLogLevel("WARN")
     log.info(
         "Spark %s started, session timezone=%s",

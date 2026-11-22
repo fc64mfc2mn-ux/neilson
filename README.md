@@ -44,8 +44,31 @@ paths. On the first run the pipeline creates `config/secrets.json` (gitignored, 
 permissions) with a random PII hash salt, and reuses it afterwards. Deleting that file
 changes the salt, and with it every hashed key in gold.
 
-Today the runner checks the config, the input files and the salt, starts a UTC Spark
-session, and then skips the bronze, silver and gold stages, which are not built yet.
+The runner checks the config, the input files and the salt, starts a UTC Spark session
+and runs every stage in order: bronze, silver, gold dimensions, `dim_lead`, facts and
+funnel, the gold PII scan, then the Power BI export. Any stage that fails stops the run
+with exit code 1. Then gate the run on data quality:
+
+```bash
+python -m src.dq_gate --config config/config.yaml
+```
+
+### Power BI export
+
+The export is the **last stage of the pipeline**, so the one command above produces it.
+It can also be rerun on its own against an existing lakehouse:
+
+```bash
+python -m src.export_powerbi --config config/config.yaml
+```
+
+It writes one CSV per gold table to `export/powerbi/` (for example `dim_lead.csv`): every
+dimension, fact and bridge plus `dim_lead_nopii`. UTF-8, comma-delimited, header row, ISO
+dates, UTC timestamps (`yyyy-MM-dd HH:mm:ss`), keys as plain integers (all below 2^53),
+empty for nulls; a second export is byte-identical. `export/` is generated and
+gitignored, like `lakehouse/`. No raw PII column can be exported (the export stops);
+`dim_lead.csv` carries hashes and the two health flags (tiers 2 and 3), so the model must
+hide them from roles not cleared for them, and `dim_lead_nopii.csv` has neither.
 
 ## Input data
 

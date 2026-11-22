@@ -30,6 +30,7 @@ from src.common.config import (
 )
 from src.common.logging_setup import get_logger
 from src.common.spark_session import get_spark, spark_settings, stop_spark
+from src.export_powerbi import export_powerbi
 from src.gold.apply_pii_policy import build_dim_lead, scan_gold_for_pii
 from src.gold.build_dimensions import build_dimensions
 from src.gold.build_facts import build_facts
@@ -46,6 +47,7 @@ STAGES: list[tuple[str, Stage]] = [
     ("gold.build_facts", build_facts),
     ("gold.build_lead_funnel", build_lead_funnel),
     ("gold.scan_pii", scan_gold_for_pii),
+    ("export.powerbi", export_powerbi),
 ]
 
 

@@ -524,3 +524,21 @@ query, assumptions 10 and 20, exemption tests, 602 in CLAUDE.md) had already bee
 and pushed in the previous slice; it was not redone. (2) `gh` is not installed, so action
 versions and the CI result came from the public GitHub API. (3) The prompt asked for
 setup-java v5 though v6 is the latest; v5 was used as asked and the gap reported.
+
+### 2026-11-22  Step 15: gold exported to CSV for Power BI
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, opening): "Step 15 is approved, ahead of step 14 (it does not depend
+on it): export gold for Power BI (PLAN.md step 15)."
+What it produced: `src/export_powerbi.py` (`python -m src.export_powerbi`, also the
+pipeline's last stage): one CSV per gold table (15) in `export/powerbi/`, UTF-8, header,
+ISO dates, UTC timestamps, plain integer keys, empty nulls, rows sorted so re-exports
+are byte-identical; it stops on any raw-PII column name. `export/` is gitignored; README
+says how to run it. Tests: formatting on a fixture (big keys, decimals, the one double,
+quoting, nulls, order), the export list equals the PII scan list, row counts per file,
+byte-identical second export, keys round-trip exactly, and the step 11 PII scan on the
+files read back with each gold table's types.
+Mistakes caught: (1) reading the CSVs back as plain strings would have made the PII scan
+compare the year 2026 with AU postcodes, so the test reads each file with its gold
+schema (and FAILFAST, so a value that does not parse back fails). (2) Spark's CSV
+writer gives part files in no fixed order, so the export sorts rows and writes one file
+itself. (3) An edit script left a mis-sorted import in the runner; ruff caught it.

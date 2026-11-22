@@ -166,3 +166,51 @@ LEFT JOIN silver.fx_rate f
 WHERE f.rate_to_gbp IS NULL
 GROUP BY p.currency_code, DATE_FORMAT(p.application_date, 'yyyy-MM')
 ORDER BY p.currency_code, application_month;
+
+-- name: policy_gbp_missing_by_cause
+-- Decisions slice (assumption 27): the policies with no GBP premium by cause (CAD has no
+-- June rate; no currency has a July rate) and by whether the application date is in Q2
+-- (2026-04-01 to 2026-06-30, the reporting period), with GBP coverage per group.
+-- Asserted in tests/test_gold_facts.py.
+WITH p AS (
+    SELECT p.*,
+           f.rate_to_gbp IS NULL AS no_rate,
+           p.application_date BETWEEN DATE'2026-04-01' AND DATE'2026-06-30' AS in_q2
+    FROM silver.policy p
+    LEFT JOIN silver.fx_rate f
+      ON f.currency_code = p.currency_code
+     AND f.rate_month = DATE_FORMAT(p.application_date, 'yyyy-MM')
+)
+SELECT
+    in_q2,
+    SUM(CASE WHEN no_rate AND currency_code = 'CAD'
+              AND DATE_FORMAT(application_date, 'yyyy-MM') = '2026-06' THEN 1 ELSE 0 END)
+        AS missing_cad_june,
+    SUM(CASE WHEN no_rate AND DATE_FORMAT(application_date, 'yyyy-MM') = '2026-07'
+             THEN 1 ELSE 0 END) AS missing_july,
+    SUM(CASE WHEN no_rate THEN 1 ELSE 0 END) AS missing_total,
+    COUNT(*) AS policies,
+    ROUND(100.0 * SUM(CASE WHEN no_rate THEN 0 ELSE 1 END) / COUNT(*), 1) AS gbp_coverage_pct
+FROM p
+GROUP BY in_q2
+ORDER BY in_q2 DESC;
+
+-- name: policies_outside_attribution_window
+-- Decisions slice (assumption 10): lead-attributed policies whose application comes more
+-- than the lead channel's attribution_window_days after the lead was created. The lead
+-- channel is the surviving lead's channel_code (assumption 4). Not applied to any core
+-- measure. Asserted in tests/test_gold_facts.py.
+WITH linked AS (
+    SELECT p.policy_id,
+           DATEDIFF(p.application_date, TO_DATE(l.created_at_utc)) AS days_to_apply,
+           c.attribution_window_days
+    FROM silver.policy p
+    JOIN silver.lead_dedup_map m ON p.lead_id = m.source_lead_id
+    JOIN silver.lead l ON l.lead_id = m.surviving_lead_id
+    JOIN silver.ref_channel c ON c.channel_code = l.channel_code
+)
+SELECT COUNT(*) AS linked_policies,
+       SUM(CASE WHEN days_to_apply > attribution_window_days THEN 1 ELSE 0 END) AS outside_window,
+       ROUND(100.0 * SUM(CASE WHEN days_to_apply > attribution_window_days THEN 1 ELSE 0 END)
+             / COUNT(*), 1) AS outside_pct
+FROM linked;

@@ -439,3 +439,23 @@ def test_the_scan_covers_every_gold_table_in_the_brief():
         "gold.bridge_lead_call", "gold.bridge_user_region",
     }  # fmt: skip
     assert set(GOLD_TABLES) == brief | {"gold.dim_lead_nopii"}
+
+
+@pytest.mark.parametrize(
+    "table, column",
+    [
+        ("gold.bridge_user_region", "role_name"),  # another column of the same table
+        ("gold.dim_lead", "lead_status"),
+        ("gold.fact_call", "disposition"),
+        ("gold.dim_agent", "team"),
+    ],
+)
+def test_staff_emails_are_caught_in_every_other_gold_column(spark, table, column):
+    """The email-pattern exemption is one column of one table, nothing wider."""
+    raw = spark.createDataFrame([("ann.lee@mail.example", "email")], "value string, kind string")
+    staff = spark.createDataFrame([("uk.analyst@northgatelife.example",)], f"{column} string")
+    assert {r.reason for r in pii_leaks({table: staff}, raw).collect()} == {"email pattern"}
+    customer = spark.createDataFrame([("ann.lee@mail.example",)], f"{column} string")
+    assert {r.reason for r in pii_leaks({table: customer}, raw).collect()} == {
+        "raw email", "email pattern"
+    }  # fmt: skip

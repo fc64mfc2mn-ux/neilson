@@ -71,12 +71,13 @@ confirm or overturn. The query and the result will be recorded against the entry
    Applied at step 12 as `lead_in_business_hours_flag` (`fact_lead`, `fact_lead_funnel`);
    the weekend and holiday rule is open question c.
 
-10. **Attribution window (pending evidence).** *Ambiguity:* `ref_channel` gives
-    `attribution_window_days` (0 to 30) but nothing says whether it limits which policies
-    count. *Options:* ignore it; count only policies within the window. *Choice:* none
-    yet; settled at step 12, when the funnel fact is built. *Evidence needed:* how many
-    linked policies fall outside it. *Reverse:* one filter in the lead-attributed policy
-    measures.
+10. **Attribution window.** *Ambiguity:* `ref_channel` gives `attribution_window_days`
+    (0 to 30) but nothing says whether it limits which policies count. *Options:* ignore
+    it; count only policies within the window. *Choice (decided):* not applied; impact 164
+    of 4,767 lead-attributed policies (3.4%) apply after their channel's window
+    (`findings_policy.sql: policies_outside_attribution_window`). Only relevant to
+    `Cost Per Policy (GBP)` (measure 10), not core. *Reverse:* one filter in the
+    lead-attributed policy measures. Open question h asks Marketing to confirm.
 
 11. **Policies with no lead.** *Options:* drop; keep against an `UNKNOWN` lead; keep with
     a NULL key. *Choice:* keep them in `gold.fact_policy` with a NULL `lead_key`, and
@@ -145,16 +146,16 @@ confirm or overturn. The query and the result will be recorded against the entry
     phone compared on digits only. *Reason:* gives 758 duplicates and 47,201 survivors.
     *Reverse:* `src/silver/dedupe_leads.py`.
 
-20. **Calls on unknown leads (defect 17).** *Ambiguity:* 1,100 calls name a lead id found
-    in no lead file. *Options:* quarantine; keep against an `UNKNOWN` lead. *Choice:*
-    keep and flag `call_lead_not_found`; the same for 45 calls on leads quarantined at step
-    7. In gold (step 12) they keep a null `lead_key` with `lead_match_status`
-    (`lead_not_found`, `lead_quarantined`), not an `UNKNOWN` lead: `dim_lead` is one row per
-    real lead (as assumption 11). AG9001 to AG9004 map to the `UNKNOWN` agent.
-    *Reason:* all 1,099 ids follow `LD-GHOST-<region>-<n>`, none matches a quarantined,
-    PK-conflict or out-of-period lead, and no policy links to them. The calls are real
-    agent work for handle time and grade of service; they cannot enter the lead-grain
-    funnel either way. *Reverse:* quarantine the flagged rows in `src/silver/calls.py`.
+20. **Calls on unresolvable leads (defect 17).** *Ambiguity:* some calls name a lead that
+    is not a surviving lead. *Options:* quarantine; an `UNKNOWN` lead; a null key.
+    *Choice:* keep the calls, flagged in silver. In `gold.fact_call` they have a null
+    `lead_key` and `lead_match_status` says why: 1,094 `lead_not_found` (ids in no lead
+    file, all `LD-GHOST-<region>-<n>`) and 45 `lead_quarantined` (leads quarantined at
+    step 7). They are not in `gold.bridge_lead_call` (61,690 = 62,829 - 1,139), so they
+    never reach the lead-grain funnel. AG9001 to AG9004 map to the `UNKNOWN` agent.
+    *Reason:* `dim_lead` is one row per real lead (as assumption 11), and the calls are
+    real agent work for handle time and grade of service. *Reverse:* quarantine the
+    flagged rows in `src/silver/calls.py`.
 
 21. **Negative, zero and click-less spend (defect 10).** *Negatives (3):* none offsets a
     positive of its campaign, each is that day's only row at under 0.3x the median:
@@ -197,11 +198,14 @@ confirm or overturn. The query and the result will be recorded against the entry
     leads with no events, but it is weaker (defect 25 shows it can be stale), so measures
     that use consent filter on the source. *Reverse:* null consent for `lead_capture`.
 
-27. **Policy premium in GBP.** *Ambiguity:* which month's rate. *Choice:* the application
-    month (the sale event; spend also uses its own activity month). No rate is invented:
-    CAD has no June rate and no currency has July, so 675 policies (517 CAD June, 158 July)
-    keep a null `annual_premium_gbp`, flagged `gbp_rate_missing` and in `dq_exception`
-    (`policy_fx_rate_missing`, warning). *Reverse:* load the rates and rerun, or switch
+27. **Policy premium in GBP.** *Ambiguity:* which month's rate. *Choice (decided):* the
+    application month (the sale event; spend also uses its own activity month). No rate
+    is invented: 675 policies keep a null `annual_premium_gbp`, flagged
+    `gbp_rate_missing` and in `dq_exception` (`policy_fx_rate_missing`, warning). By
+    cause and quarter (`findings_policy.sql: policy_gbp_missing_by_cause`): 517 CAD June,
+    all inside Q2 (Q2 coverage 89.7% of 5,014 policies); 158 July, any currency, all
+    outside Q2 (0% coverage). `Average Annual Premium (GBP)` must state its coverage, the
+    share of policies with a GBP premium. *Reverse:* load the rates and rerun, or switch
     to the policy start month in `policy_gbp` (`src/gold/build_facts.py`).
 
 28. **Funnel definitions (step 12).** First-touch campaign: the surviving lead is the

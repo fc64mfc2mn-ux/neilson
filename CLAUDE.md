@@ -157,7 +157,9 @@ order of `docs/PLAN.md` steps 4 onward. Known traps in it (each needs a test her
   match is a permanent test for every region.
 - **The funnel's grain.** `bridge_lead_call` is not the funnel. `fact_lead_funnel` has one
   row per surviving lead (47,201 expected), and a test asserts it.
-- **DQ gate.** No zero threshold: about 675 error rows are expected. Gate on the expected
+- **DQ gate.** No zero threshold: 602 error-severity exceptions per run at step 12;
+  the step 13 gate builds its expected counts from the register, one line per defect,
+  and must reconcile to the run. Gate on the expected
   count per defect, held in config, and fail only on a breach beyond it. Test a seeded
   breach (fails) and clean data (passes).
 - **Spend reconciliation.** 2,224 = 2,001 kept + 40 exact copies + 180 CAD June rows + 3
@@ -207,4 +209,6 @@ quarantined); gold dimensions with a deterministic SCD2 `dim_agent` (1,139 call 
 and 615 call agents resolve to UNKNOWN); PII policy with `gold.dim_lead` (47,201),
 `gold.dim_lead_nopii`; gold facts, both bridges and `fact_lead_funnel` (47,201), the PII
 scan as the last stage; the runner stops on any unbuilt or failing stage.
+Decisions slice after step 12 done (policy GBP coverage, attribution window not applied,
+null `lead_key` for unresolvable call leads, open questions a to i).
 Next: step 13 of `docs/PLAN.md` (tests, CI, DQ gate).

@@ -275,3 +275,39 @@ def test_fact_lead_funnel_is_one_row_per_surviving_lead(gold):
     assert s.calls == 61_690  # every bridged call counted once
     assert s.policies == 4_767  # every lead-attributed policy linked once
     assert s.negative == 0  # calls before their lead were quarantined in silver
+
+
+@pytest.mark.slow
+def test_policies_without_gbp_by_cause_and_quarter(gold):
+    """Assumption 27: 517 CAD June (inside Q2) + 158 July (outside Q2) = 675."""
+    _, _, t = gold
+    p = t("gold.fact_policy")
+    rows = {r.in_q2: r for r in run_finding(p.sparkSession, FINDINGS_POLICY,
+                                            "policy_gbp_missing_by_cause")}  # fmt: skip
+    q2, later = rows[True], rows[False]
+    assert (q2.missing_cad_june, q2.missing_july, q2.missing_total, q2.policies) == (
+        517, 0, 517, 5_014
+    )  # fmt: skip
+    assert (later.missing_cad_june, later.missing_july, later.missing_total, later.policies) == (
+        0, 158, 158, 158
+    )  # fmt: skip
+    assert (q2.gbp_coverage_pct, later.gbp_coverage_pct) == (Decimal("89.7"), Decimal("0.0"))
+    # Cross-check against gold: Q2 policies with a GBP premium.
+    in_q2 = p.where("application_date BETWEEN DATE'2026-04-01' AND DATE'2026-06-30'")
+    assert in_q2.count() == 5_014 and in_q2.where("NOT gbp_rate_missing").count() == 4_497
+
+
+@pytest.mark.slow
+def test_policies_outside_the_attribution_window(gold):
+    """Assumption 10: not applied; 164 of 4,767 linked policies (3.4%) fall outside it."""
+    _, _, t = gold
+    r = run_finding(t("gold.fact_policy").sparkSession, FINDINGS_POLICY,
+                    "policies_outside_attribution_window")[0]  # fmt: skip
+    assert (r.linked_policies, r.outside_window, r.outside_pct) == (4_767, 164, Decimal("3.4"))
+    # Cross-check from gold: the funnel's days to application against the channel window.
+    funnel = t("gold.fact_lead_funnel").where("policy_key IS NOT NULL")
+    windows = t("gold.dim_channel").select("channel_key", "attribution_window_days")
+    outside = funnel.join(windows, "channel_key").where(
+        F.col("days_lead_to_policy") > F.col("attribution_window_days")
+    )
+    assert funnel.count() == 4_767 and outside.count() == 164

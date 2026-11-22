@@ -563,3 +563,26 @@ real procedure would fail on SQL Server; a run on the submission date sees no sp
 07:00 run drops 1 April; minor-unit rows inflate UK and AU spend 13x and 16x.
 Mistakes caught: a `${...}` in an SQL comment broke `string.Template`; a wait loop
 matched ruff's "All checks passed!" instead of pytest's summary.
+
+### 2026-11-22  Step 16 preparation: policy status rule, measures, model design
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, opening): "Step 16 preparation is approved: the Power BI model design,
+measures and expected values (PLAN.md step 16)."
+What it produced: one sentence in `docs/LEGACY_PORT.md` (SQL Server behaviour derived, not
+executed); the assumption 3 decision (exclude NTU only) from
+`findings_powerbi.sql: conversion_by_status_rule`; `powerbi/measures.dax` (12 required
+measures plus 2 helpers, in DAX query view syntax with an `EVALUATE` check);
+`powerbi/MODEL_DESIGN.md`; `src/powerbi_expected.py` writing
+`powerbi/expected_values.csv`; `tests/test_powerbi_model.py` (fixture tests for
+denominators, grain and nulls, DAX/SQL rule parity, reproducibility on real data).
+The Power BI model itself is built by hand on the VM: Claude Code cannot run Desktop, so
+no DAX here has been executed.
+Mistakes caught: (1) a KPI log sentence claimed the legacy port's 90-day lead window
+explains a difference; the window holds every lead, so it was removed before commit.
+(2) A guessed AHT figure (641.5) in a test; the query gives 642.6. (3) The DAX parser
+regex used DOTALL, so a header swallowed the whole block; fixture floats failed against
+a decimal schema; a SQL comment naming `percentile_approx` tripped the parity check. All
+caught by the tests. (4) The first types table listed two columns that are not imported.
+Design points found by measuring, not assumed: one policy per surviving lead (why 4,499
+policies equal 4,499 converted leads); `fact_policy` has no campaign, channel or lead
+date, so Power Query merges them from `fact_lead`; unconnected calls carry talk time.

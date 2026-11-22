@@ -8,15 +8,18 @@ powerbi/measures.dax encodes the same logic. Real-data tests are marked `slow`.
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
-from src.powerbi_expected import expected_csv, expected_rows, run_query
+from src.common.findings import load_findings
+from src.powerbi_expected import CORE_MEASURES, FINDINGS, expected_csv, expected_rows, run_query
 
 FIXTURE = "global_temp."
 REPO = Path(__file__).resolve().parents[1]
+DAX = REPO / "powerbi" / "measures.dax"
 EXPECTED = REPO / "powerbi" / "expected_values.csv"
 
 
@@ -166,6 +169,156 @@ def test_expected_csv_is_byte_identical_on_a_second_run(spark):
     first = expected_csv(spark, FIXTURE)
     assert first == expected_csv(spark, FIXTURE)
     assert first.startswith("measure,slice,slice_value,value\nMarketing Spend (GBP),all,ALL,")
+
+
+# ---------------------------------------------------------------------------
+# measures.dax: names, descriptions, and the logic it shares with the SQL
+# ---------------------------------------------------------------------------
+
+BLOCK = re.compile(
+    r"// ==== \[(?P<tier>core|stretch|helper)(?: (?P<num>\d+))?\] (?P<head>[^\n]+)\n"
+    r"(?P<comments>(?:[ \t]*//[^\n]*\n)*?)"
+    r"\s*MEASURE 'Measures'\[(?P<name>[^\]]+)\] =\n(?P<dax>.*?)(?=\n\s*// ====|\n// Core|\Z)",
+    re.DOTALL,
+)
+REQUIRED = {
+    "Marketing Spend (GBP)": ("core", "1"),
+    "Leads (Deduplicated)": ("core", "2"),
+    "Cost Per Lead (GBP)": ("core", "3"),
+    "Contact Rate": ("stretch", "4"),
+    "Lead to Policy Conversion Rate": ("core", "5"),
+    "Average Annual Premium (GBP)": ("stretch", "6"),
+    "Average Handle Time (Seconds)": ("core", "7"),
+    "Grade of Service": ("stretch", "8"),
+    "Time to First Call (Median Minutes)": ("core", "9"),
+    "Cost Per Policy (GBP)": ("stretch", "10"),
+    "Cost Per Lead (GBP) MoM %": ("stretch", None),
+    "CPL vs Target Variance (GBP)": ("stretch", None),
+}
+
+
+def _measures():
+    blocks = {}
+    for m in BLOCK.finditer(DAX.read_text(encoding="utf-8")):
+        assert m["head"] == m["name"], m["head"]
+        assert m["name"] not in blocks, f"duplicate measure {m['name']}"
+        description = re.search(r"// Description: (.+?)\n\s*// Folder:", m["comments"], re.S)
+        blocks[m["name"]] = {
+            "tier": (m["tier"], m["num"]),
+            "description": description
+            and " ".join(line.strip().lstrip("/").strip() for line in description[1].splitlines()),
+            "folder": re.search(r"// Folder: ([^\n]+?) \| Format: ([^\n]+)", m["comments"]),
+            "dax": " ".join(m["dax"].split()),
+        }
+    return blocks
+
+
+def _flat(sql: str) -> str:
+    """Whitespace collapsed, `--` comments removed."""
+    return " ".join(re.sub(r"--[^\n]*", "", sql).split())
+
+
+def test_every_required_measure_has_its_exact_name_tier_and_a_description():
+    measures = _measures()
+    for name, tier in REQUIRED.items():
+        assert name in measures, f"missing {name!r}"
+        assert measures[name]["tier"] == tier, name
+    for name, m in measures.items():
+        assert m["description"] and len(m["description"]) > 40, name
+        assert m["folder"], name
+        assert name not in REQUIRED or m["tier"][0] != "helper"
+    assert not any(n == "Conversion Rate" for n in measures)
+    assert "Connected Call to Policy Conversion Rate" not in measures  # step 18
+    assert "86.8%" in measures["Average Annual Premium (GBP)"]["description"]
+    assert {n for n, _ in CORE_MEASURES} == {
+        n for n, (t, _) in REQUIRED.items() if t == "core"
+    }  # fmt: skip
+
+
+def test_ratios_use_divide_never_the_slash_operator():
+    for name, m in _measures().items():
+        assert " / " not in m["dax"], name
+
+
+# For each core measure: DAX fragments and the SQL fragments that encode the same rule.
+SHARED_LOGIC = {
+    "Marketing Spend (GBP)": (
+        ["SUM ( fact_marketing_spend_daily[spend_gbp] )"],
+        "expected_marketing_spend_gbp",
+        ["SUM(f.spend_gbp)", "FROM gold.fact_marketing_spend_daily"],
+    ),
+    "Leads (Deduplicated)": (
+        ["DISTINCTCOUNT ( fact_lead_funnel[lead_key] )"],
+        "expected_leads_deduplicated",
+        [
+            "COUNT(DISTINCT f.lead_key)",
+            "FROM gold.fact_lead_funnel",
+            "d.date_key = l.lead_created_date_key",
+        ],
+    ),  # fmt: skip
+    "Cost Per Lead (GBP)": (
+        ["DIVIDE ( [Marketing Spend (GBP)], [Leads (Deduplicated)] )"],
+        "expected_cost_per_lead_gbp",
+        ["s.spend_gbp / NULLIF(l.leads, 0)"],
+    ),
+    "Lead to Policy Conversion Rate": (
+        ["DIVIDE ( [Policies Linked to Surviving Leads], [Leads (Deduplicated)] )"],
+        "expected_lead_to_policy_conversion_rate",
+        [
+            "WHERE p.is_lead_attributed AND COALESCE(p.policy_status, '') <> 'NTU'",
+            "d.date_key = l.lead_created_date_key",
+            "p.policies / NULLIF(l.leads, 0)",
+        ],
+    ),  # fmt: skip
+    "Policies Linked to Surviving Leads": (
+        [
+            "COUNTROWS ( fact_policy )",
+            "KEEPFILTERS ( fact_policy[is_lead_attributed] = TRUE () )",
+            'KEEPFILTERS ( fact_policy[policy_status] <> "NTU" )',
+        ],
+        "conversion_by_status_rule",
+        ["WHERE p.is_lead_attributed", "COUNT_IF(p.policy_status <> 'NTU')"],
+    ),  # fmt: skip
+    "Average Handle Time (Seconds)": (
+        [
+            "SUM ( fact_call[talk_time_seconds] ) + SUM ( fact_call[hold_time_seconds] )",
+            "COUNTROWS ( fact_call )",
+            "KEEPFILTERS ( fact_call[is_connected] = TRUE () )",
+        ],
+        "expected_average_handle_time_seconds",
+        [
+            "(SUM(c.talk_time_seconds) + SUM(c.hold_time_seconds)) / COUNT(*)",
+            "WHERE c.is_connected",
+        ],
+    ),  # fmt: skip
+    "Time to First Call (Median Minutes)": (
+        ["MEDIAN ( fact_lead_funnel[minutes_to_first_call] )"],
+        "expected_time_to_first_call_median_minutes",
+        ["percentile(f.minutes_to_first_call, 0.5)", "d.date_key = l.lead_created_date_key"],
+    ),
+}
+
+
+@pytest.mark.parametrize("measure", sorted(SHARED_LOGIC))
+def test_dax_and_sql_encode_the_same_rule(measure):
+    dax_parts, query, sql_parts = SHARED_LOGIC[measure]
+    dax = _measures()[measure]["dax"]
+    sql = _flat(load_findings(FINDINGS)[query])
+    for part in dax_parts:
+        assert part in dax, (measure, part)
+    for part in sql_parts:
+        assert part in sql, (query, part)
+    assert "percentile_approx" not in sql
+
+
+def test_mom_uses_the_date_table_and_variance_handles_no_selection():
+    m = _measures()
+    mom = m["Cost Per Lead (GBP) MoM %"]["dax"]
+    assert "DATEADD ( dim_date[date], -1, MONTH )" in mom
+    assert "NOT ISBLANK ( PreviousCpl )" in mom and "HASONEVALUE ( dim_date[year_month] )" in mom
+    var = m["CPL vs Target Variance (GBP)"]["dax"]
+    assert "SELECTEDVALUE ( 'Target CPL'[Target CPL (GBP)] )" in var  # no default value
+    assert "NOT ISBLANK ( TargetCpl )" in var
 
 
 # ---------------------------------------------------------------------------

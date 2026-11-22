@@ -1,19 +1,220 @@
-// DAX for all Power BI measures, as text, so the reviewer can read it without
-// opening the .pbix. Add each measure below under its name, matching the
-// measure's description field in the model and its row in docs/KPI_DEFINITIONS.md.
+// Northgate Life funnel: every Power BI measure, as text, so it can be read without
+// opening the .pbix. The model is described in powerbi/MODEL_DESIGN.md.
 //
-// Required measures (fill in the DAX for each):
-//   1.  Marketing Spend (GBP)
-//   2.  Leads (Deduplicated)
-//   3.  Cost Per Lead (GBP)
-//   4.  Contact Rate
-//   5.  Lead to Policy Conversion Rate
-//   6.  Average Annual Premium (GBP)
-//   7.  Average Handle Time (Seconds)
-//   8.  Grade of Service
-//   9.  Time to First Call (Median Minutes)
-//   10. Cost Per Policy (GBP)
+// How to use: paste this whole file into Power BI Desktop's DAX query view and run it.
+// Each MEASURE line offers "Update model: Add new measure"; add them all to the
+// 'Measures' table. Then set each measure's Description, Display folder and Format
+// from the comment block above it. The EVALUATE queries at the end print the values to
+// compare with powerbi/expected_values.csv (same slices: all, by region, by month).
 //
-// Stretch model objects (fill in if attempted):
-//   Cost Per Lead (GBP) MoM %
-//   CPL vs Target Variance (GBP)
+// Block format (tests/test_powerbi_model.py parses it):
+//   // ==== [core N | stretch N | stretch | helper] <measure name>
+//   // Description: <text, continued on lines starting "//   ">
+//   // Folder: <display folder> | Format: <format string>
+//   MEASURE 'Measures'[<measure name>] = <DAX>
+//
+// Core scope (brief): measures 1, 2, 3, 5, 7, 9. Stretch: 4, 6, 8, 10, MoM %, target
+// variance. Helpers are not in the brief; core measures use them, so build them first.
+// Date anchors: spend on its spend date, leads and lead-linked policies on the
+// lead-created date (active relationships), calls on the call date, premium on the
+// policy-start date (USERELATIONSHIP). Policy status rule: assumption 3 (exclude NTU).
+// Not built yet: Connected Call to Policy Conversion Rate (step 18).
+
+DEFINE
+
+    // ==== [helper] Policies Linked to Surviving Leads
+    // Description: Policies linked to a surviving (deduplicated) lead, excluding NTU
+    //   (not taken up). Cancelled and lapsed policies count: they were sold. Policies
+    //   with no surviving lead are excluded. Filtered by the lead-created date.
+    // Folder: 2. Funnel | Format: #,0
+    MEASURE 'Measures'[Policies Linked to Surviving Leads] =
+        CALCULATE (
+            COUNTROWS ( fact_policy ),
+            KEEPFILTERS ( fact_policy[is_lead_attributed] = TRUE () ),
+            KEEPFILTERS ( fact_policy[policy_status] <> "NTU" )
+        )
+
+    // ==== [core 1] Marketing Spend (GBP)
+    // Description: Marketing spend in GBP: local spend converted at its month's rate in
+    //   the lakehouse. Excludes quarantined rows (exact copies, negatives, and CAD June
+    //   spend, which has no rate). Filtered by the spend date.
+    // Folder: 1. Spend and leads | Format: \£#,0.00
+    MEASURE 'Measures'[Marketing Spend (GBP)] =
+        SUM ( fact_marketing_spend_daily[spend_gbp] )
+
+    // ==== [core 2] Leads (Deduplicated)
+    // Description: Distinct count of surviving leads after deduplication (same normalised
+    //   email or phone within 48 hours; the earliest survives). Filtered by the
+    //   lead-created date.
+    // Folder: 1. Spend and leads | Format: #,0
+    MEASURE 'Measures'[Leads (Deduplicated)] =
+        DISTINCTCOUNT ( fact_lead_funnel[lead_key] )
+
+    // ==== [core 3] Cost Per Lead (GBP)
+    // Description: Marketing Spend (GBP) divided by Leads (Deduplicated). Blank when
+    //   there are no leads or no spend.
+    // Folder: 1. Spend and leads | Format: \£#,0.00
+    MEASURE 'Measures'[Cost Per Lead (GBP)] =
+        DIVIDE ( [Marketing Spend (GBP)], [Leads (Deduplicated)] )
+
+    // ==== [stretch 4] Contact Rate
+    // Description: Surviving leads with at least one connected call (CONNECTED, QUOTED,
+    //   APPLICATION_STARTED or SOLD), divided by Leads (Deduplicated).
+    // Folder: 2. Funnel | Format: 0.0%
+    MEASURE 'Measures'[Contact Rate] =
+        DIVIDE (
+            CALCULATE (
+                [Leads (Deduplicated)],
+                KEEPFILTERS ( fact_lead_funnel[connected_call_count] > 0 )
+            ),
+            [Leads (Deduplicated)]
+        )
+
+    // ==== [core 5] Lead to Policy Conversion Rate
+    // Description: Lead grain. Policies linked to a surviving lead (excluding NTU),
+    //   divided by Leads (Deduplicated), both by the lead-created date and the lead's
+    //   first-touch campaign. Counts policies, not converted leads. Not the call-grain
+    //   Connected Call to Policy Conversion Rate.
+    // Folder: 2. Funnel | Format: 0.00%
+    MEASURE 'Measures'[Lead to Policy Conversion Rate] =
+        DIVIDE ( [Policies Linked to Surviving Leads], [Leads (Deduplicated)] )
+
+    // ==== [stretch 6] Average Annual Premium (GBP)
+    // Description: Sum of annual premium in GBP divided by the count of policies with a
+    //   GBP premium, excluding NTU, by policy-start date. Coverage: 86.8% of counted
+    //   policies (4,240 of 4,884) have a GBP premium; the rest lack an FX rate (CAD June,
+    //   July). See Average Annual Premium (GBP) Coverage % for the current selection.
+    // Folder: 4. Policy | Format: \£#,0.00
+    MEASURE 'Measures'[Average Annual Premium (GBP)] =
+        CALCULATE (
+            DIVIDE (
+                SUM ( fact_policy[annual_premium_gbp] ),
+                COUNT ( fact_policy[annual_premium_gbp] )
+            ),
+            KEEPFILTERS ( fact_policy[policy_status] <> "NTU" ),
+            USERELATIONSHIP ( dim_date[date_key], fact_policy[policy_start_date_key] )
+        )
+
+    // ==== [helper] Average Annual Premium (GBP) Coverage %
+    // Description: Share of the policies Average Annual Premium (GBP) counts (excluding
+    //   NTU, by policy-start date) that have a GBP premium.
+    // Folder: 4. Policy | Format: 0.0%
+    MEASURE 'Measures'[Average Annual Premium (GBP) Coverage %] =
+        CALCULATE (
+            DIVIDE (
+                COUNT ( fact_policy[annual_premium_gbp] ),
+                COUNTROWS ( fact_policy )
+            ),
+            KEEPFILTERS ( fact_policy[policy_status] <> "NTU" ),
+            USERELATIONSHIP ( dim_date[date_key], fact_policy[policy_start_date_key] )
+        )
+
+    // ==== [core 7] Average Handle Time (Seconds)
+    // Description: Talk time plus hold time of connected calls (CONNECTED, QUOTED,
+    //   APPLICATION_STARTED, SOLD), divided by the connected call count. Talk time on
+    //   calls that did not connect is excluded. Filtered by the call date.
+    // Folder: 3. Calls | Format: #,0
+    MEASURE 'Measures'[Average Handle Time (Seconds)] =
+        CALCULATE (
+            DIVIDE (
+                SUM ( fact_call[talk_time_seconds] ) + SUM ( fact_call[hold_time_seconds] ),
+                COUNTROWS ( fact_call )
+            ),
+            KEEPFILTERS ( fact_call[is_connected] = TRUE () )
+        )
+
+    // ==== [stretch 8] Grade of Service
+    // Description: Inbound calls answered within the SLA, divided by inbound calls
+    //   offered. The SLA is each region's own target (gos_target_seconds), applied in
+    //   the lakehouse. Filtered by the call date.
+    // Folder: 3. Calls | Format: 0.0%
+    MEASURE 'Measures'[Grade of Service] =
+        DIVIDE (
+            CALCULATE (
+                COUNTROWS ( fact_call ),
+                KEEPFILTERS ( fact_call[call_direction] = "INBOUND" ),
+                KEEPFILTERS ( fact_call[answered_within_sla_flag] = TRUE () )
+            ),
+            CALCULATE (
+                COUNTROWS ( fact_call ),
+                KEEPFILTERS ( fact_call[call_direction] = "INBOUND" )
+            )
+        )
+
+    // ==== [core 9] Time to First Call (Median Minutes)
+    // Description: Median minutes from lead creation to the lead's first call, one value
+    //   per surviving lead; leads never called are excluded. AU call times are converted
+    //   from Australia/Sydney; an unexplained AU gap remains (flagged, not corrected).
+    // Folder: 2. Funnel | Format: #,0.0
+    MEASURE 'Measures'[Time to First Call (Median Minutes)] =
+        MEDIAN ( fact_lead_funnel[minutes_to_first_call] )
+
+    // ==== [stretch 10] Cost Per Policy (GBP)
+    // Description: Marketing Spend (GBP) divided by Policies Linked to Surviving Leads
+    //   (excluding NTU). Spend by spend date, policies by lead-created date. The
+    //   channel attribution window is not applied (assumption 10).
+    // Folder: 2. Funnel | Format: \£#,0.00
+    MEASURE 'Measures'[Cost Per Policy (GBP)] =
+        DIVIDE ( [Marketing Spend (GBP)], [Policies Linked to Surviving Leads] )
+
+    // ==== [stretch] Cost Per Lead (GBP) MoM %
+    // Description: Month-over-month change in Cost Per Lead (GBP), using the marked date
+    //   table. Blank unless one month is selected, and blank for the first month in the
+    //   data (no previous month) or a month with no cost per lead.
+    // Folder: 1. Spend and leads | Format: +0.0%;-0.0%;0.0%
+    MEASURE 'Measures'[Cost Per Lead (GBP) MoM %] =
+        VAR CurrentCpl = [Cost Per Lead (GBP)]
+        VAR PreviousCpl =
+            CALCULATE ( [Cost Per Lead (GBP)], DATEADD ( dim_date[date], -1, MONTH ) )
+        RETURN
+            IF (
+                HASONEVALUE ( dim_date[year_month] )
+                    && NOT ISBLANK ( CurrentCpl )
+                    && NOT ISBLANK ( PreviousCpl ),
+                DIVIDE ( CurrentCpl - PreviousCpl, PreviousCpl )
+            )
+
+    // ==== [stretch] CPL vs Target Variance (GBP)
+    // Description: Cost Per Lead (GBP) minus the target CPL selected in the Target CPL
+    //   table (GBP 20 to 120, steps of 5). Positive means over target. Blank when no
+    //   single target is selected or there is no cost per lead.
+    // Folder: 1. Spend and leads | Format: +\£#,0.00;-\£#,0.00;\£0.00
+    MEASURE 'Measures'[CPL vs Target Variance (GBP)] =
+        VAR TargetCpl = SELECTEDVALUE ( 'Target CPL'[Target CPL (GBP)] )
+        VAR Cpl = [Cost Per Lead (GBP)]
+        RETURN
+            IF ( NOT ISBLANK ( TargetCpl ) && NOT ISBLANK ( Cpl ), Cpl - TargetCpl )
+
+// Core measures for the whole dataset, by region and by month: compare with
+// powerbi/expected_values.csv.
+EVALUATE
+ROW (
+    "Marketing Spend (GBP)", [Marketing Spend (GBP)],
+    "Leads (Deduplicated)", [Leads (Deduplicated)],
+    "Cost Per Lead (GBP)", [Cost Per Lead (GBP)],
+    "Lead to Policy Conversion Rate", [Lead to Policy Conversion Rate],
+    "Average Handle Time (Seconds)", [Average Handle Time (Seconds)],
+    "Time to First Call (Median Minutes)", [Time to First Call (Median Minutes)]
+)
+
+EVALUATE
+SUMMARIZECOLUMNS (
+    dim_region[region_code],
+    "Marketing Spend (GBP)", [Marketing Spend (GBP)],
+    "Leads (Deduplicated)", [Leads (Deduplicated)],
+    "Cost Per Lead (GBP)", [Cost Per Lead (GBP)],
+    "Lead to Policy Conversion Rate", [Lead to Policy Conversion Rate],
+    "Average Handle Time (Seconds)", [Average Handle Time (Seconds)],
+    "Time to First Call (Median Minutes)", [Time to First Call (Median Minutes)]
+)
+
+EVALUATE
+SUMMARIZECOLUMNS (
+    dim_date[year_month],
+    "Marketing Spend (GBP)", [Marketing Spend (GBP)],
+    "Leads (Deduplicated)", [Leads (Deduplicated)],
+    "Cost Per Lead (GBP)", [Cost Per Lead (GBP)],
+    "Lead to Policy Conversion Rate", [Lead to Policy Conversion Rate],
+    "Average Handle Time (Seconds)", [Average Handle Time (Seconds)],
+    "Time to First Call (Median Minutes)", [Time to First Call (Median Minutes)]
+)

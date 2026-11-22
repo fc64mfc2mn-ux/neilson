@@ -18,10 +18,13 @@ confirm or overturn. The query and the result will be recorded against the entry
    in silver calls.
 
 3. **Policy status.** *Ambiguity:* which policies count as converted. *Options:* all;
-   exclude NTU; also exclude CANCELLED and LAPSED. *Choice:* exclude NTU only. *Reason:*
-   the legacy procedure excludes NTU, and a cancelled policy was still sold. The stricter
-   rule's effect will be measured and reported. *Reverse:* change the status filter in the
-   policy measures.
+   exclude NTU; also exclude CANCELLED and LAPSED. *Choice (decided, step 16):* exclude
+   NTU only. *Reason:* the legacy procedure excludes NTU, and a cancelled or lapsed policy
+   was still sold; conversion is the sale, retention is another measure. Measured
+   (`findings_powerbi.sql: conversion_by_status_rule`): the stricter rule lowers the rate
+   from 9.53% to 8.11% (1.42 points, 14.9% relative); by region 0.82 to 1.64 points, 13.4%
+   to 15.9% relative, so the regional ranking is unchanged. *Reverse:* the status filter
+   in `Policies Linked to Surviving Leads` (`powerbi/measures.dax`).
 
 4. **Channel source of truth.** *Ambiguity:* lead and campaign channel can disagree.
    *Options:* lead channel; campaign channel. *Choice:* campaign channel, after

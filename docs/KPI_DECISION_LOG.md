@@ -55,6 +55,16 @@ change what the number means, which the BI Manager's note forbids.
 - BI Manager rules: one certified measure per KPI; both grains named and documented; the
   words "Conversion Rate" never appear on their own in a measure name.
 
+## Policies counted, not converted leads
+
+`Lead to Policy Conversion Rate` counts policies linked to a surviving lead, as the brief
+says: 4,499 lead-attributed policies that are not NTU, over 47,201 surviving leads (9.53%).
+The legacy port's `ConvertedLeads` counts leads with at least one such policy, also
+4,499. They agree today only because no surviving lead has more than one policy (4,767
+linked policies on 4,767 distinct leads; a test asserts it). A lead that bought two
+policies would count twice in the measure and once in the port, and the measure could in
+principle pass 100% for a small slice.
+
 ## How to reverse it
 
 Every axis is a column or relationship in the model, not baked into the pipeline.
@@ -71,7 +81,7 @@ Defect register references (27 defects in total; see `DEFECT_REGISTER.md` for st
 | Policy duplicates, conflicting fields | Defect 19 | Decide at step 9 |
 | Policies with no lead | Defect 20; assumption 11 | Decided: NULL `lead_key`, excluded |
 | DECLINED yet INFORCE policies | Defect 22 | Finding; counted as their `policy_status` says until PolicyCore confirms |
-| NTU, CANCELLED, LAPSED | Assumption 3 | Decided: exclude NTU only; effect of also excluding CANCELLED and LAPSED reported at step 18 |
+| NTU, CANCELLED, LAPSED | Assumption 3 | Decided: exclude NTU only. Also excluding CANCELLED and LAPSED: 9.53% to 8.11% overall, 0.82 to 1.64 points by region, ranking unchanged (`conversion_by_status_rule`) |
 | `attribution_window_days` | Assumption 10 | Decide at step 12 |
 | "International" = CA, AU, US | Assumption 1 | Decided |
 | Call-file timezones (business-hours flag, first call) | Defect 15; assumption 5 | Decide at step 8 |

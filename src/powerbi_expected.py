@@ -38,13 +38,18 @@ def run_query(spark: SparkSession, name: str, prefix: str = GOLD_PREFIX) -> list
     return spark.sql(queries[name].replace(GOLD_PREFIX, prefix)).collect()
 
 
-# Core measures (brief: 1, 2, 3, 5, 7, 9), in the brief's order, with their query; then
+# Core measures (brief: 1, 2, 3, 5, 7, 9) in the brief's order, then Connected Call to
+# Policy Conversion Rate (step 18, the second certified KPI), with their query; then
 # Cost Per Policy (GBP) (stretch 10), which the channel visual needs.
 CORE_MEASURES = (
     ("Marketing Spend (GBP)", "expected_marketing_spend_gbp"),
     ("Leads (Deduplicated)", "expected_leads_deduplicated"),
     ("Cost Per Lead (GBP)", "expected_cost_per_lead_gbp"),
     ("Lead to Policy Conversion Rate", "expected_lead_to_policy_conversion_rate"),
+    (
+        "Connected Call to Policy Conversion Rate",
+        "expected_connected_call_to_policy_conversion_rate",
+    ),
     ("Average Handle Time (Seconds)", "expected_average_handle_time_seconds"),
     ("Time to First Call (Median Minutes)", "expected_time_to_first_call_median_minutes"),
 )
@@ -56,7 +61,7 @@ GOLD_TABLES = (
 )  # fmt: skip
 HEADER = ("measure", "slice", "slice_value", "value")
 SLICE_ORDER = {"all": 0, "region": 1, "month": 2, "channel": 3, "seniority": 4,
-               "first_call_bucket": 5}  # fmt: skip
+               "first_call_bucket": 5, "quarter": 6}  # fmt: skip
 BUCKET_ORDER = {name: i for i, (name, _) in enumerate(FIRST_CALL_BUCKETS)}
 DEFAULT_OUT = Path("powerbi/expected_values.csv")
 

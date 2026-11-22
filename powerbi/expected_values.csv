@@ -67,6 +67,17 @@ Lead to Policy Conversion Rate,seniority,Core,0.163387
 Lead to Policy Conversion Rate,seniority,Senior,0.153203
 Lead to Policy Conversion Rate,seniority,Trainee,0.038913
 Lead to Policy Conversion Rate,seniority,Unknown,
+Connected Call to Policy Conversion Rate,all,ALL,0.240142
+Connected Call to Policy Conversion Rate,region,AU,0.120295
+Connected Call to Policy Conversion Rate,region,CA,0.269492
+Connected Call to Policy Conversion Rate,region,UK,0.252003
+Connected Call to Policy Conversion Rate,region,US,0.284116
+Connected Call to Policy Conversion Rate,month,2026-04,0.085594
+Connected Call to Policy Conversion Rate,month,2026-05,0.204969
+Connected Call to Policy Conversion Rate,month,2026-06,0.253201
+Connected Call to Policy Conversion Rate,month,2026-07,2.247423
+Connected Call to Policy Conversion Rate,quarter,2026-Q2,0.185564
+Connected Call to Policy Conversion Rate,quarter,2026-Q3,2.247423
 Average Handle Time (Seconds),all,ALL,517.556781
 Average Handle Time (Seconds),region,AU,469.591284
 Average Handle Time (Seconds),region,CA,550.223432

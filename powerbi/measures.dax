@@ -18,7 +18,9 @@
 // Date anchors: spend on its spend date, leads and lead-linked policies on the
 // lead-created date (active relationships), calls on the call date, premium on the
 // policy-start date (USERELATIONSHIP). Policy status rule: assumption 3 (exclude NTU).
-// Not built yet: Connected Call to Policy Conversion Rate (step 18).
+// Connected Call to Policy Conversion Rate (step 18): the call-grain KPI. Policies use the
+// policy-start date, connected calls the call date; docs/KPI_RECONCILIATION.md bridges it
+// to Lead to Policy Conversion Rate.
 
 DEFINE
 
@@ -78,6 +80,41 @@ DEFINE
     // Folder: 2. Funnel | Format: 0.00%
     MEASURE 'Key Measures'[Lead to Policy Conversion Rate] =
         DIVIDE ( [Policies Linked to Surviving Leads], [Leads (Deduplicated)] )
+
+    // ==== [core] Connected Call to Policy Conversion Rate
+    // Description: Call grain. Policies (excluding NTU) linked to a surviving lead created
+    //   inside business hours, by policy-start date, divided by connected calls (CONNECTED,
+    //   QUOTED, APPLICATION_STARTED, SOLD) on the same leads, by call date. A call-grain
+    //   ratio counts a lead once per connected call: it is a productivity ratio, not a share
+    //   of leads. Not the lead-grain Lead to Policy Conversion Rate; see
+    //   docs/KPI_RECONCILIATION.md for the steps between them.
+    // Folder: 2. Funnel | Format: 0.00%
+    MEASURE 'Key Measures'[Connected Call to Policy Conversion Rate] =
+        // The lead set is read once. The lead-created date filter is switched off for it
+        // (otherwise a date slicer would also pick leads by creation date), then the set
+        // filters policies and calls by lead_key, so each fact keeps its own date and region.
+        VAR BusinessHoursLeads =
+            CALCULATETABLE (
+                VALUES ( fact_lead_funnel[lead_key] ),
+                fact_lead_funnel[lead_in_business_hours_flag] = TRUE (),
+                CROSSFILTER ( dim_date[date_key], fact_lead_funnel[lead_created_date_key], NONE )
+            )
+        VAR Policies =
+            CALCULATE (
+                COUNTROWS ( fact_policy ),
+                USERELATIONSHIP ( dim_date[date_key], fact_policy[policy_start_date_key] ),
+                KEEPFILTERS ( fact_policy[is_lead_attributed] = TRUE () ),
+                KEEPFILTERS ( fact_policy[policy_status] <> "NTU" ),
+                TREATAS ( BusinessHoursLeads, fact_policy[lead_key] )
+            )
+        VAR ConnectedCalls =
+            CALCULATE (
+                COUNTROWS ( fact_call ),
+                KEEPFILTERS ( fact_call[is_connected] = TRUE () ),
+                TREATAS ( BusinessHoursLeads, fact_call[lead_key] )
+            )
+        RETURN
+            DIVIDE ( Policies, ConnectedCalls )
 
     // ==== [stretch 6] Average Annual Premium (GBP)
     // Description: Sum of annual premium in GBP divided by the count of policies with a
@@ -204,6 +241,7 @@ ROW (
     "Leads (Deduplicated)", [Leads (Deduplicated)],
     "Cost Per Lead (GBP)", [Cost Per Lead (GBP)],
     "Lead to Policy Conversion Rate", [Lead to Policy Conversion Rate],
+    "Connected Call to Policy Conversion Rate", [Connected Call to Policy Conversion Rate],
     "Average Handle Time (Seconds)", [Average Handle Time (Seconds)],
     "Time to First Call (Median Minutes)", [Time to First Call (Median Minutes)]
 )
@@ -215,6 +253,7 @@ SUMMARIZECOLUMNS (
     "Leads (Deduplicated)", [Leads (Deduplicated)],
     "Cost Per Lead (GBP)", [Cost Per Lead (GBP)],
     "Lead to Policy Conversion Rate", [Lead to Policy Conversion Rate],
+    "Connected Call to Policy Conversion Rate", [Connected Call to Policy Conversion Rate],
     "Average Handle Time (Seconds)", [Average Handle Time (Seconds)],
     "Time to First Call (Median Minutes)", [Time to First Call (Median Minutes)]
 )
@@ -226,6 +265,17 @@ SUMMARIZECOLUMNS (
     "Leads (Deduplicated)", [Leads (Deduplicated)],
     "Cost Per Lead (GBP)", [Cost Per Lead (GBP)],
     "Lead to Policy Conversion Rate", [Lead to Policy Conversion Rate],
+    "Connected Call to Policy Conversion Rate", [Connected Call to Policy Conversion Rate],
     "Average Handle Time (Seconds)", [Average Handle Time (Seconds)],
     "Time to First Call (Median Minutes)", [Time to First Call (Median Minutes)]
+)
+
+// Q2 2026 for both conversion measures: compare with the quarter rows in
+// powerbi/expected_values.csv. Both are blank for a quarter with no policies.
+EVALUATE
+SUMMARIZECOLUMNS (
+    dim_date[year],
+    dim_date[quarter],
+    "Lead to Policy Conversion Rate", [Lead to Policy Conversion Rate],
+    "Connected Call to Policy Conversion Rate", [Connected Call to Policy Conversion Rate]
 )

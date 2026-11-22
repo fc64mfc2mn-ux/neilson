@@ -1,0 +1,15 @@
+period,step,step_name,numerator,denominator,rate_pct,delta_pp
+Q2 2026,0,Lead to Policy Conversion Rate,4499,47201,9.5316,
+Q2 2026,1,"Numerator date: policy start, not lead created",3392,47201,7.1863,-2.3453
+Q2 2026,2,Denominator grain: leads become calls,3392,61690,5.4985,-1.6878
+Q2 2026,3,Connected calls only,3392,18851,17.9937,+12.4952
+Q2 2026,4,Call date: calls made in the period,3392,18338,18.4971,+0.5034
+Q2 2026,5,Business-hours leads only (both sides),1324,7135,18.5564,+0.0593
+Q2 2026,6,"Agent attribution: last call (a slice, no change)",1324,7135,18.5564,+0.0000
+All dates,0,Lead to Policy Conversion Rate,4499,47201,9.5316,
+All dates,1,"Numerator date: policy start, not lead created",4499,47201,9.5316,+0.0000
+All dates,2,Denominator grain: leads become calls,4499,61690,7.2929,-2.2387
+All dates,3,Connected calls only,4499,18851,23.8661,+16.5732
+All dates,4,Call date: calls made in the period,4499,18851,23.8661,+0.0000
+All dates,5,Business-hours leads only (both sides),1760,7329,24.0142,+0.1481
+All dates,6,"Agent attribution: last call (a slice, no change)",1760,7329,24.0142,+0.0000

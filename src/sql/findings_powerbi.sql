@@ -321,3 +321,144 @@ SELECT COUNT_IF(is_connected)                                          AS connec
        ROUND(SUM(talk_time_seconds + hold_time_seconds) / COUNT_IF(is_connected), 1)
                                                                        AS aht_all_calls_numerator
 FROM gold.fact_call
+
+-- name: expected_connected_call_to_policy_conversion_rate
+-- DAX: DIVIDE ( Policies, ConnectedCalls ). Both sides are limited to surviving leads
+-- created inside business hours (fact_lead_funnel.lead_in_business_hours_flag; the DAX
+-- reads the lead set once and applies it to fact_policy and fact_call with TREATAS).
+-- Policies: is_lead_attributed, not NTU (a blank status is kept in DAX, hence the
+-- COALESCE), dated by policy start. Calls: is_connected (CONNECTED, QUOTED,
+-- APPLICATION_STARTED, SOLD), dated by call date. Each fact uses its own region. Slices:
+-- all, region, month (year_month), quarter (year-Qn). NULL where a slice has no policy
+-- or no connected call (DAX: BLANK). Counts are extra columns for the reconciliation.
+WITH pol AS (
+    SELECT r.region_code, d.year_month,
+           CONCAT(CAST(d.year AS STRING), '-Q', CAST(d.quarter AS STRING)) AS quarter,
+           1 AS policies, 0 AS calls
+    FROM gold.fact_policy p
+    JOIN gold.fact_lead_funnel f ON f.lead_key = p.lead_key
+    LEFT JOIN gold.dim_region r ON r.region_key = p.region_key
+    LEFT JOIN gold.dim_date d ON d.date_key = p.policy_start_date_key
+    WHERE p.is_lead_attributed AND COALESCE(p.policy_status, '') <> 'NTU'
+      AND f.lead_in_business_hours_flag
+),
+cal AS (
+    SELECT r.region_code, d.year_month,
+           CONCAT(CAST(d.year AS STRING), '-Q', CAST(d.quarter AS STRING)) AS quarter,
+           0 AS policies, 1 AS calls
+    FROM gold.fact_call c
+    JOIN gold.fact_lead_funnel f ON f.lead_key = c.lead_key
+    LEFT JOIN gold.dim_region r ON r.region_key = c.region_key
+    LEFT JOIN gold.dim_date d ON d.date_key = c.call_date_key
+    WHERE c.is_connected
+      AND f.lead_in_business_hours_flag
+),
+u AS (SELECT * FROM pol UNION ALL SELECT * FROM cal)
+SELECT CASE
+            WHEN GROUPING(region_code) = 0 THEN 'region'
+            WHEN GROUPING(year_month) = 0 THEN 'month'
+            WHEN GROUPING(quarter) = 0 THEN 'quarter'
+            ELSE 'all' END AS slice,
+       CASE
+            WHEN GROUPING(region_code) = 0 THEN COALESCE(CAST(region_code AS STRING), '(blank)')
+            WHEN GROUPING(year_month) = 0 THEN COALESCE(CAST(year_month AS STRING), '(blank)')
+            WHEN GROUPING(quarter) = 0 THEN COALESCE(CAST(quarter AS STRING), '(blank)')
+            ELSE 'ALL' END AS slice_value,
+       CASE WHEN SUM(policies) = 0 THEN NULL
+            ELSE SUM(policies) / NULLIF(SUM(calls), 0) END AS value,
+       SUM(policies) AS policies,
+       SUM(calls)    AS connected_calls
+FROM u
+GROUP BY GROUPING SETS ((), (region_code), (year_month), (quarter))
+
+-- name: kpi_bridge_steps
+-- The walk from Lead to Policy Conversion Rate to Connected Call to Policy Conversion
+-- Rate (docs/KPI_RECONCILIATION.md), one row per period and step with the counts after
+-- that step. Policies are lead-attributed and not NTU; leads, policies and calls all
+-- belong to surviving leads. A period is Q2 2026 (calendar quarter; assumption 12) or
+-- all dates.
+--   0 start: policies by lead-created date / surviving leads created in the period
+--   1 numerator date: policies by policy-start date instead
+--   2 denominator grain: leads become all calls of leads created in the period
+--   3 drop calls that did not connect
+--   4 call date: connected calls made in the period (any lead creation date)
+--   5 population: business-hours leads only, on both sides
+--   6 attribution: last-call agent (a slice, no change to the totals)
+WITH periods AS (SELECT 'Q2 2026' AS period UNION ALL SELECT 'All dates'),
+pol AS (
+    SELECT f.lead_in_business_hours_flag AS bh,
+           dl.year AS ly, dl.quarter AS lq, ds.year AS sy, ds.quarter AS sq
+    FROM gold.fact_policy p
+    JOIN gold.fact_lead_funnel f ON f.lead_key = p.lead_key
+    LEFT JOIN gold.dim_date dl ON dl.date_key = p.lead_created_date_key
+    LEFT JOIN gold.dim_date ds ON ds.date_key = p.policy_start_date_key
+    WHERE p.is_lead_attributed AND COALESCE(p.policy_status, '') <> 'NTU'
+),
+lead AS (
+    SELECT dl.year AS ly, dl.quarter AS lq
+    FROM gold.fact_lead_funnel f
+    LEFT JOIN gold.dim_date dl ON dl.date_key = f.lead_created_date_key
+),
+cal AS (
+    SELECT c.is_connected AS conn, f.lead_in_business_hours_flag AS bh,
+           dl.year AS ly, dl.quarter AS lq, dc.year AS cy, dc.quarter AS cq
+    FROM gold.fact_call c
+    JOIN gold.fact_lead_funnel f ON f.lead_key = c.lead_key
+    LEFT JOIN gold.dim_date dl ON dl.date_key = f.lead_created_date_key
+    LEFT JOIN gold.dim_date dc ON dc.date_key = c.call_date_key
+),
+n AS (
+    SELECT pr.period,
+           SUM(CASE WHEN pr.period = 'All dates' OR (p.ly = 2026 AND p.lq = 2) THEN 1 ELSE 0 END) AS by_lead_date,
+           SUM(CASE WHEN pr.period = 'All dates' OR (p.sy = 2026 AND p.sq = 2) THEN 1 ELSE 0 END) AS by_start_date,
+           SUM(CASE WHEN p.bh AND (pr.period = 'All dates' OR (p.sy = 2026 AND p.sq = 2)) THEN 1 ELSE 0 END) AS by_start_date_bh
+    FROM pol p CROSS JOIN periods pr GROUP BY pr.period
+),
+l AS (
+    SELECT pr.period,
+           SUM(CASE WHEN pr.period = 'All dates' OR (x.ly = 2026 AND x.lq = 2) THEN 1 ELSE 0 END) AS leads
+    FROM lead x CROSS JOIN periods pr GROUP BY pr.period
+),
+c AS (
+    SELECT pr.period,
+           SUM(CASE WHEN pr.period = 'All dates' OR (x.ly = 2026 AND x.lq = 2) THEN 1 ELSE 0 END) AS all_calls_of_period_leads,
+           SUM(CASE WHEN x.conn AND (pr.period = 'All dates' OR (x.ly = 2026 AND x.lq = 2)) THEN 1 ELSE 0 END) AS connected_of_period_leads,
+           SUM(CASE WHEN x.conn AND (pr.period = 'All dates' OR (x.cy = 2026 AND x.cq = 2)) THEN 1 ELSE 0 END) AS connected_in_period,
+           SUM(CASE WHEN x.conn AND x.bh AND (pr.period = 'All dates' OR (x.cy = 2026 AND x.cq = 2)) THEN 1 ELSE 0 END) AS connected_in_period_bh
+    FROM cal x CROSS JOIN periods pr GROUP BY pr.period
+),
+w AS (
+    SELECT n.period, n.by_lead_date, n.by_start_date, n.by_start_date_bh, l.leads,
+           c.all_calls_of_period_leads, c.connected_of_period_leads,
+           c.connected_in_period, c.connected_in_period_bh
+    FROM n JOIN l ON l.period = n.period JOIN c ON c.period = n.period
+)
+SELECT w.period, s.step, s.step_name, s.numerator, s.denominator
+FROM w
+LATERAL VIEW STACK(7,
+    0, 'Lead to Policy Conversion Rate',                w.by_lead_date,    w.leads,
+    1, 'Numerator date: policy start, not lead created', w.by_start_date,   w.leads,
+    2, 'Denominator grain: leads become calls',          w.by_start_date,   w.all_calls_of_period_leads,
+    3, 'Connected calls only',                           w.by_start_date,   w.connected_of_period_leads,
+    4, 'Call date: calls made in the period',            w.by_start_date,   w.connected_in_period,
+    5, 'Business-hours leads only (both sides)',         w.by_start_date_bh, w.connected_in_period_bh,
+    6, 'Agent attribution: last call (a slice, no change)', w.by_start_date_bh, w.connected_in_period_bh
+) s AS step, step_name, numerator, denominator
+ORDER BY w.period DESC, s.step
+
+-- name: kpi_connected_call_variants
+-- Q2 2026 (calendar quarter) counts behind the variants tried when the indicative 20.5%
+-- could not be reproduced (docs/KPI_RECONCILIATION.md). Policies are not NTU, by policy-start
+-- date; calls are connected, by call date. "Linked" means a surviving lead; "all" keeps
+-- policies without a lead and calls whose lead was not found or was quarantined.
+SELECT
+    (SELECT COUNT(*) FROM gold.fact_policy p JOIN gold.dim_date d ON d.date_key = p.policy_start_date_key
+      WHERE d.year = 2026 AND d.quarter = 2 AND COALESCE(p.policy_status, '') <> 'NTU') AS policies_all,
+    (SELECT COUNT(*) FROM gold.fact_policy p JOIN gold.dim_date d ON d.date_key = p.policy_start_date_key
+      WHERE d.year = 2026 AND d.quarter = 2 AND COALESCE(p.policy_status, '') <> 'NTU'
+        AND p.is_lead_attributed) AS policies_linked,
+    (SELECT COUNT(*) FROM gold.fact_call c JOIN gold.dim_date d ON d.date_key = c.call_date_key
+      WHERE d.year = 2026 AND d.quarter = 2 AND c.is_connected) AS connected_all,
+    (SELECT COUNT(*) FROM gold.fact_call c JOIN gold.dim_date d ON d.date_key = c.call_date_key
+      WHERE d.year = 2026 AND d.quarter = 2 AND c.is_connected
+        AND c.lead_match_status = 'matched') AS connected_linked

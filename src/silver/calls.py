@@ -18,8 +18,9 @@ Order on the latest bronze batch of each call file:
    - `call_lead_quarantined` (defect 17): lead exists but was quarantined at
      step 7. Kept, same treatment.
    - `call_agent_not_found` (defect 17): agent not on the roster; UNKNOWN agent.
-   - `call_au_timestamp_unverified` (defect 15): region in
-     `calls.timestamp_unverified_regions`; kept as stored (assumption 5).
+   - `call_au_residual_offset` (defect 15): region in `calls.residual_offset_regions`.
+     AU is converted from Sydney time, yet first calls still come about 8.5 h after
+     the lead; an open observation, flagged and not corrected (assumption 5).
    - `call_after_do_not_call` (defect 26): a later call on a lead that already
      had a DO_NOT_CALL disposition.
 
@@ -150,7 +151,7 @@ def _by_file(df: DataFrame, file_col: str) -> dict[str, int]:
 def build_calls(spark: SparkSession, config: dict) -> CallReconciliation:
     call_config = config.get("calls", {})
     source_timezone = {**DEFAULT_SOURCE_TIMEZONE, **call_config.get("source_timezone", {})}
-    unverified_regions = list(call_config.get("timestamp_unverified_regions", []))
+    residual_regions = list(call_config.get("residual_offset_regions", []))
 
     raw = latest_batch(read_table(spark, config, CALLS_SOURCE)).cache()
     rows_in_by_file = _by_file(raw, "_source_file")
@@ -225,10 +226,11 @@ def build_calls(spark: SparkSession, config: dict) -> CallReconciliation:
     write_dq_exception(ghost_agents, "call_agent_not_found", CALLS_SOURCE, "call_id", "info",
                        config=config, action="flagged", detail_col="detail")  # fmt: skip
 
-    unverified = kept.where(F.col("region_code").isin(unverified_regions)).withColumn(
-        "detail", F.lit("timestamps kept as stored; first-call offset unexplained (assumption 5)")
+    residual = kept.where(F.col("region_code").isin(residual_regions)).withColumn(
+        "detail",
+        F.lit("converted from local time; first-call gap still unexplained (assumption 5)"),
     )
-    write_dq_exception(unverified, "call_au_timestamp_unverified", CALLS_SOURCE, "call_id",
+    write_dq_exception(residual, "call_au_residual_offset", CALLS_SOURCE, "call_id",
                        "warning", config=config, action="flagged", detail_col="detail")  # fmt: skip
 
     after_dnc = calls_after_do_not_call(kept).withColumn(
@@ -242,7 +244,7 @@ def build_calls(spark: SparkSession, config: dict) -> CallReconciliation:
             after_dnc.select("call_id", F.lit(True).alias("after_do_not_call")), "call_id", "left"
         )  # fmt: skip
         .withColumn("after_do_not_call", F.coalesce("after_do_not_call", F.lit(False)))
-        .withColumn("start_ts_offset_unverified", F.col("region_code").isin(unverified_regions))
+        .withColumn("residual_offset_flag", F.col("region_code").isin(residual_regions))
     )
     overwrite_table(spark, silver, config, "silver.call")
 

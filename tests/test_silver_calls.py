@@ -108,7 +108,7 @@ def test_new_checks_are_mapped_to_registered_defects():
     assert {
         "call_exact_duplicate": 13,
         "call_timestamp_unparseable": 14,
-        "call_au_timestamp_unverified": 15,
+        "call_au_residual_offset": 15,
         "call_end_before_start": 16,
         "call_start_before_lead": 16,
         "call_lead_not_found": 17,
@@ -118,11 +118,11 @@ def test_new_checks_are_mapped_to_registered_defects():
     }.items() <= CHECK_DEFECTS.items()
 
 
-def test_config_keeps_every_region_as_utc():
+def test_config_converts_au_from_sydney_and_keeps_the_rest_utc():
     zones = load_config(str(REPO_ROOT / "config" / "config.yaml"))["calls"]["source_timezone"]
     assert zones == {
         "UK": "UTC",
-        "AU": "UTC",
+        "AU": "Australia/Sydney",
         "CA": "UTC",
         "US": "UTC",
     }, "Call timezones changed: update assumption 5 and the AU gap test together"
@@ -151,20 +151,21 @@ def test_call_rows_reconcile_rule_by_rule(spark, real_calls):
         "calls_uk_au.csv": 346, "calls_ca_us.csv": 194
     }  # fmt: skip
     # Defect 16: 380 end before start (256 + 124; the register's 262 is UK/AU raw rows,
-    # duplicates included), then 245 start before their lead (the register's "about 0.4%").
+    # duplicates included), then 251 start before their lead: 245 as stored, plus 6 AU
+    # calls that move before their lead once AU is converted from Sydney time.
     assert rec.removed_by_file["call_end_before_start"] == {
         "calls_uk_au.csv": 256, "calls_ca_us.csv": 124
     }  # fmt: skip
     assert rec.removed_by_file["call_start_before_lead"] == {
-        "calls_uk_au.csv": 176, "calls_ca_us.csv": 69
+        "calls_uk_au.csv": 182, "calls_ca_us.csv": 69
     }  # fmt: skip
     assert rec.removed_by_file.get("call_timestamp_unparseable", {}) == {}
-    # 64,000 = 62,835 + 540 + 380 + 245. CLAUDE.md expects 62,830 from a rounded 250.
-    assert (rec.rows_in, rec.rows_out, rec.rows_quarantined) == (64_000, 62_835, 1_165)
+    # 64,000 = 62,829 + 540 + 380 + 251.
+    assert (rec.rows_in, rec.rows_out, rec.rows_quarantined) == (64_000, 62_829, 1_171)
     assert rec.rows_in == rec.rows_out + rec.rows_quarantined
-    # By call id: 63,460 distinct = 62,835 out + 380 + 245 (duplicates share an id).
-    assert rec.distinct_ids_in == 63_460 == rec.rows_out + 380 + 245
-    assert read_table(spark, config, "silver.call").count() == 62_835
+    # By call id: 63,460 distinct = 62,829 out + 380 + 251 (duplicates share an id).
+    assert rec.distinct_ids_in == 63_460 == rec.rows_out + 380 + 251
+    assert read_table(spark, config, "silver.call").count() == 62_829
 
 
 @pytest.mark.slow
@@ -174,12 +175,12 @@ def test_call_quarantine_and_flag_counts(spark, real_calls):
         # check: (rows, severity, action)
         "call_exact_duplicate": (540, "info", "quarantined"),
         "call_end_before_start": (380, "error", "quarantined"),
-        "call_start_before_lead": (245, "warning", "quarantined"),
+        "call_start_before_lead": (251, "warning", "quarantined"),
         # Flags are raised on rows kept in silver: 1,100 ghost-lead calls less 6 that end
         # before they start; 620 ghost-agent calls less 4 + 1 quarantined.
         "call_lead_not_found": (1_094, "info", "flagged"),
         "call_agent_not_found": (615, "info", "flagged"),
-        "call_au_timestamp_unverified": (14_768, "warning", "flagged"),
+        "call_au_residual_offset": (14_762, "warning", "flagged"),
         "call_lead_quarantined": (45, "info", "flagged"),
         "call_after_do_not_call": (6_311, "warning", "flagged"),
     }
@@ -202,22 +203,21 @@ def test_silver_call_content(spark, real_calls):
     assert calls.where("call_end_ts_utc < call_start_ts_utc").count() == 0
     assert calls.where("call_start_ts_utc IS NULL OR duration_seconds < 0").count() == 0
     assert dict(calls.groupBy("region_code").count().collect()) == {
-        "UK": 25_454, "AU": 14_768, "CA": 12_794, "US": 9_819
+        "UK": 25_454, "AU": 14_762, "CA": 12_794, "US": 9_819
     }  # fmt: skip
     # CA/US keep their own SLA and wrap-up values.
     assert calls.where("region_code = 'CA' AND answered_within_sla_flag IS NOT NULL").count() > 0
     assert calls.where("region_code = 'US' AND wrap_up_code IS NULL").count() == 0
     # Flags are columns too, so gold can use them without reading dq_exception.
     assert calls.where("after_do_not_call").count() == 6_311
-    assert calls.where("start_ts_offset_unverified").count() == 14_768
-    assert calls.where("start_ts_offset_unverified AND region_code != 'AU'").count() == 0
+    assert calls.where("residual_offset_flag").count() == 14_762
+    assert calls.where("residual_offset_flag AND region_code != 'AU'").count() == 0
     calls.unpersist()
 
 
 @pytest.mark.slow
-def test_au_first_call_gap_is_unexplained_and_au_is_kept_as_stored(spark, real_calls):
-    """Assumption 5. Fails if anyone converts AU or the evidence changes."""
-    config, _ = real_calls
+def test_timezone_hypotheses_on_bronze(spark, real_calls):
+    """Assumption 5 evidence, on bronze times as stored."""
     gap = {r.region_code: r for r in run_finding(spark, FINDINGS, "first_call_gap_by_hypothesis")}
     # UK, CA and US behave as UTC: first call 22 to 45 minutes after the lead.
     assert round(gap["UK"].median_min_as_utc) == 22
@@ -225,34 +225,66 @@ def test_au_first_call_gap_is_unexplained_and_au_is_kept_as_stored(spark, real_c
     # As local time they would be 38 minutes early (UK) or 4.7 hours late (CA, US).
     assert round(gap["UK"].median_min_as_local) == -38
     assert round(gap["CA"].median_min_as_local) == 285
-    # AU: 18.5 hours as UTC, still 8.5 hours as Sydney local time. Neither fits.
+    # AU: 18.5 hours as stored, 8.5 hours as Sydney local time.
     assert round(gap["AU"].median_min_as_utc) == 1_111
     assert round(gap["AU"].median_min_as_local) == 509
-    # silver.call keeps AU as stored: no AU start differs from its bronze value, and the
-    # first-call median stays near the as-UTC figure (1,113 vs 1,111: silver has already
-    # dropped quarantined calls). A Sydney conversion would put it near 510.
-    au = run_finding(spark, FINDINGS, "au_first_call_gap_in_silver")[0]
-    message = (
-        "silver.call AU timestamps no longer match the stored values: AU has been "
-        "converted. Update assumption 5, defect 15 and this test together."
-    )
-    assert (au.au_rows_changed, au.au_rows) == (0, 14_768), message
-    assert round(au.median_min) == 1_113, message
+    # Which side is shifted: application date = linked call date for every UK, CA and US
+    # policy as stored; for AU only after moving the call back 10 h (not 9, not 11).
+    fit = {
+        (r.region_code, r.offset_hours): (r.matching, r.policies)
+        for r in run_finding(spark, FINDINGS, "policy_date_vs_call_date_by_offset")
+    }
+    for region, n in (("UK", 1_716), ("CA", 1_058), ("US", 810)):
+        assert fit[(region, 0)] == (n, n)
+    assert fit[("AU", 0)] == (248, 426)
+    assert fit[("AU", 10)] == (426, 426)
+    assert fit[("AU", 9)][0] < 426 and fit[("AU", 11)][0] < 426
+    # AU lead ingestion lag equals every other region's: the leads are not shifted.
+    lead_side = {r.region_code: r for r in run_finding(spark, FINDINGS, "lead_internal_timing")}
+    assert {round(r.median_ingest_lag_min, 1) for r in lead_side.values()} <= {2.6, 2.7}
 
 
 @pytest.mark.slow
-def test_au_calls_not_leads_carry_a_ten_hour_offset(spark, real_calls):
-    """Which side is shifted: policy dates fit AU calls moved back 10 h; leads look fine."""
-    rows = run_finding(spark, FINDINGS, "policy_date_vs_call_date_by_offset")
-    fit = {(r.region_code, r.offset_hours): (r.matching, r.policies) for r in rows}
-    for region, n in (("UK", 1_716), ("CA", 1_058), ("US", 810)):
-        assert fit[(region, 0)] == (n, n)  # application date = call date, as UTC
-    assert fit[("AU", 0)] == (248, 426)
-    assert fit[("AU", 10)] == (426, 426)  # only a 10 h shift makes every AU policy fit
-    assert fit[("AU", 9)][0] < 426 and fit[("AU", 11)][0] < 426
-    lead_side = {r.region_code: r for r in run_finding(spark, FINDINGS, "lead_internal_timing")}
-    # AU lead ingestion lag equals every other region: no shift on the lead side.
-    assert {round(r.median_ingest_lag_min, 1) for r in lead_side.values()} <= {2.6, 2.7}
+def test_policy_date_equals_call_date_in_every_region(spark, real_calls):
+    """Permanent check (assumption 5): with each region's configured zone, a policy's
+    application date equals its linked call's date."""
+    rows = {r.region_code: r for r in run_finding(spark, FINDINGS, "policy_date_vs_call_date")}
+    # Distinct calls before quarantine, converted as configured: AU 426 of 426.
+    assert {k: (r.matching, r.policies) for k, r in rows.items()} == {
+        "UK": (1_716, 1_716), "AU": (426, 426), "CA": (1_058, 1_058), "US": (810, 810)
+    }  # fmt: skip
+    # On silver.call (4 AU, 21 UK, 4 CA and 6 US linked calls are quarantined).
+    assert {k: (r.matching_silver, r.policies_silver) for k, r in rows.items()} == {
+        "UK": (1_695, 1_695), "AU": (422, 422), "CA": (1_054, 1_054), "US": (804, 804)
+    }  # fmt: skip
+
+
+@pytest.mark.slow
+def test_bronze_vs_silver_shows_the_au_shift_only(spark, real_calls):
+    rows = {
+        (r.region_code, r.shift_hours): r
+        for r in run_finding(spark, FINDINGS, "call_shift_bronze_vs_silver")
+    }
+    # AU moves back 11 h before Sydney DST ended (5 April 2026, 03:00 local), 10 h after.
+    assert {k: r.calls for k, r in rows.items() if k[0] == "AU"} == {
+        ("AU", 11): 351, ("AU", 10): 14_411
+    }  # fmt: skip
+    assert str(rows[("AU", 11)].last_stored_start) < "2026-04-05 03:00"
+    assert str(rows[("AU", 10)].first_stored_start) >= "2026-04-05 02:00"
+    # UK, CA and US are unchanged.
+    assert {k for k in rows if k[0] != "AU"} == {("UK", 0), ("CA", 0), ("US", 0)}
+
+
+@pytest.mark.slow
+def test_au_residual_first_call_gap_stays_open_and_flagged(spark, real_calls):
+    """After conversion, AU's first call still comes about 8.5 h after the lead, against
+    22 to 45 minutes elsewhere. An open observation: flagged, not corrected."""
+    config, _ = real_calls
+    gap = {r.region_code: r for r in run_finding(spark, FINDINGS, "first_call_gap_in_silver")}
+    assert round(gap["AU"].median_min) == 512
+    assert all(gap[x].median_min < 60 for x in ("UK", "CA", "US"))
+    flagged = _checks(spark, config, "call_au_residual_offset")
+    assert flagged.count() == 14_762 == gap["AU"].calls
 
 
 @pytest.mark.slow
@@ -261,7 +293,8 @@ def test_finding_register_vs_distinct(spark, real_calls):
     assert (r.end_before_start_raw_uk_au, r.end_before_start_raw, r.end_before_start) == (
         262, 388, 380
     )  # fmt: skip
-    assert (r.before_lead_raw, r.before_lead) == (248, 245)
+    assert (r.before_lead_raw, r.before_lead) == (248, 245)  # as stored
+    assert r.before_lead_converted == 251  # AU from Sydney time: what silver quarantines
     assert (r.ghost_agent_raw, r.ghost_agent) == (624, 620)
     assert (r.ghost_lead_ids, r.ghost_lead_raw, r.ghost_lead) == (1_099, 1_111, 1_100)
 
@@ -283,9 +316,9 @@ def test_finding_ghost_leads(spark, real_calls):
 @pytest.mark.slow
 def test_finding_start_before_lead_gap(spark, real_calls):
     r = run_finding(spark, FINDINGS, "start_before_lead_gap")[0]
-    # 245 calls start between 40 minutes and 24 hours before their lead.
-    assert r.calls == 245
-    assert round(r.min_minutes) == 40 and round(r.max_minutes) == 1_434
+    # 251 calls start between 2 and 24 hours before their lead (AU converted).
+    assert r.calls == 251
+    assert round(r.min_minutes) == 120 and round(r.max_minutes) == 1_434
     assert 1_410 < r.median_minutes < 1_416
 
 
@@ -300,3 +333,17 @@ def test_finding_calls_after_do_not_call(spark, real_calls):
     assert sum(rows[x].calls_distinct for x in ("CA", "US")) == 1_966
     assert sum(rows[x].leads_distinct for x in ("CA", "US")) == 1_389
     assert sum(r.calls_silver for r in rows.values()) == 6_311
+
+
+@pytest.mark.slow
+def test_finding_do_not_call_reconciliation(spark, real_calls):
+    """6,427 distinct calls before quarantine vs 6,311 flagged in silver."""
+    r = run_finding(spark, FINDINGS, "do_not_call_reconciliation")[0]
+    assert (r.flagged_distinct, r.flagged_silver) == (6_427, 6_311)
+    # 116 = 38 flagged calls quarantined themselves (all end before start)
+    #     + 63 kept calls whose lead has no DO_NOT_CALL call left in silver
+    #     + 15 kept calls whose remaining DO_NOT_CALL call comes after them.
+    assert (r.self_quarantined, r.anchor_gone, r.anchor_later) == (38, 63, 15)
+    assert r.flagged_distinct - r.flagged_silver == 38 + 63 + 15
+    # Leads, all four regions combined.
+    assert (r.leads_distinct, r.leads_silver) == (4_286, 4_223)

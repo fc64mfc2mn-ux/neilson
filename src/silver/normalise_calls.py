@@ -13,11 +13,11 @@ other file's format is not guessed: it parses to null and is quarantined by
 the caller.
 
 Timezone per region (assumption 5, defect 15) comes from config
-`calls.source_timezone`. Every region is `UTC` (kept as stored): UK, CA and US
-fit UTC on first-call latency, and AU fits no tested zone, so it is kept as
-stored and flagged rather than converted. Setting a region to an IANA zone (for
-example `Australia/Sydney`) converts that region's local wall-clock time to UTC,
-DST-aware. That is the reversal route.
+`calls.source_timezone`. UK, CA and US are `UTC` (kept as stored): they fit UTC
+on first-call latency and on policy dates. AU is `Australia/Sydney`: AU call
+times are local wall-clock time, converted to UTC DST-aware (policy application
+dates match the converted call date for all 426 AU policies). Any IANA zone
+works; `UTC` keeps the stored value, which is the reversal route.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from pyspark.sql import functions as F
 
 SOURCE_UK_AU = "calls_uk_au.csv"
 SOURCE_CA_US = "calls_ca_us.csv"
-DEFAULT_SOURCE_TIMEZONE = {"UK": "UTC", "AU": "UTC", "CA": "UTC", "US": "UTC"}
+DEFAULT_SOURCE_TIMEZONE = {"UK": "UTC", "AU": "Australia/Sydney", "CA": "UTC", "US": "UTC"}
 ISO_UTC = "yyyy-MM-dd'T'HH:mm:ssX"
 DAY_FIRST = "dd/MM/yyyy HH:mm"
 

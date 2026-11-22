@@ -372,3 +372,23 @@ silver test expected the bronze median exactly; silver drops quarantined calls (
 vs 1,111), so it now checks row-level equality with bronze instead.
 Reference trap found: the earlier attempt nulled CA/US wrap-up code, SLA flag,
 compliance flag and queue wait, which the file does contain; a test now guards it.
+
+### 2026-11-22  Step 8 follow-up: AU converted from Sydney time; DO_NOT_CALL reconciled
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, first line): "Step 8 follow-up, then push. CLAUDE.md was already
+updated by the human (expected counts, AU timezone rule, where things stand, rules 5
+and 7): do not edit it again, just check its diff and include it in this slice's commit."
+What it produced: AU set to `Australia/Sydney` in config and code default; tests first
+for the policy-date match in every region (426 of 426 AU on distinct calls, 422 of 422
+on silver), the bronze-vs-silver shift (351 AU calls 11 h, 14,411 10 h, others 0) and
+the residual AU first-call gap (512 min), flagged as `call_au_residual_offset`. The
+DO_NOT_CALL gap 6,427 vs 6,311 is explained in a query: 38 flagged calls quarantined
+themselves, 63 lost their only DO_NOT_CALL anchor, 15 kept only a later one; 4,286 vs
+4,223 leads across all regions. Assumption 5, register rows 15, 16, 26 updated.
+What it found that the human's CLAUDE.md does not say: converting AU moves 6 more AU
+calls before their lead, so silver is 62,829 (251 before-lead), not 62,835. Reported,
+CLAUDE.md left untouched as instructed. The CLAUDE.md change was already committed by
+the human (194e524), so it could not be included in this slice.
+Mistakes caught: the before-lead gap test kept the as-stored minimum (40 min); after
+conversion it is 120 min (that call was AU, so it moved 10 h). The slow test failed
+and was corrected from the query; the register text was fixed with it.

@@ -29,18 +29,14 @@ confirm or overturn. The query and the result will be recorded against the entry
    normalisation only 600 of 47,687 leads disagree, scattered across all channel pairs
    (`findings_reference.sql`). *Reverse:* switch the `channel_key` source in gold.
 
-5. **Call-file timezones (evidence recorded; AU unresolved).**
-   *Ambiguity:* neither call file states its timezone. *Options:* UTC; region local time
-   (DST-aware); a fixed offset. *Choice:* every region kept as stored, as UTC. Median
-   first call after lead creation, as UTC: 22 min (UK), 45 (CA), 40 (US); as local time:
-   -38, 285, 280. AU: 1,111 min as UTC, 509 as Sydney time; neither fits. AU calls are
-   flagged, not converted. *Which side is shifted:* policy application dates match the
-   linked call's date for every UK, CA and US policy, but for only 248 of 426 AU
-   policies. Moving AU calls back exactly 10 h makes all 426 match. AU lead ingestion
-   lag (2.7 min) equals every other region's. So the AU calls carry a +10 h offset and
-   the leads look unshifted, yet 8.5 h stays unexplained after the correction.
-   *Reverse:* `calls.source_timezone` in config (for example `AU: Australia/Sydney`),
-   then update the AU gap test. Queries: `src/sql/findings_calls.sql`.
+5. **Call-file timezones.** *Ambiguity:* neither call file states its timezone.
+   *Options:* UTC; region local time (DST-aware); a fixed offset. *Choice:* UK, CA and
+   US as UTC; AU converted from `Australia/Sydney`. *Reason:* a policy's application
+   date equals its linked call's date for every UK, CA and US policy as stored, and for
+   all 426 AU policies only after the conversion (248 before); AU lead timestamps show
+   no shift. After conversion AU first calls still come a median 512 min after the lead
+   (22 to 45 elsewhere): flagged as an open observation, not corrected. *Reverse:*
+   `calls.source_timezone` in config. Queries: `src/sql/findings_calls.sql`.
 
 6. **Minor-unit spend (pending evidence).** *Ambiguity:* some GBP and AUD spend rows sit
    far above their campaign's median, consistent with pence or cents. *Options:* keep;

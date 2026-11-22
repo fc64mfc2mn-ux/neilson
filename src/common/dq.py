@@ -76,7 +76,7 @@ CHECK_DEFECTS: dict[str, int] = {
     "agent_team_region_mismatch": 27,
     "call_exact_duplicate": 13,
     "call_timestamp_unparseable": 14,
-    "call_au_timestamp_unverified": 15,
+    "call_au_residual_offset": 15,
     "call_end_before_start": 16,
     "call_start_before_lead": 16,
     "call_lead_not_found": 17,

@@ -84,15 +84,15 @@ sources:
 
 
 # Call timestamps (assumption 5, defect 15). Source timezone per region: UTC keeps the
-# stored value; an IANA zone (e.g. Australia/Sydney) converts local time to UTC.
+# stored value; an IANA zone converts local wall-clock time to UTC, DST-aware.
 calls:
   source_timezone:
     UK: UTC
-    AU: UTC
+    AU: Australia/Sydney
     CA: UTC
     US: UTC
-  # Kept as stored but flagged: the first-call offset is not explained by any zone.
-  timestamp_unverified_regions: [AU]
+  # Converted, but first calls still come about 8.5 h after the lead: flagged, open.
+  residual_offset_regions: [AU]
 
 lakehouse:
   local_root: lakehouse

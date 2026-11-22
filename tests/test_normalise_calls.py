@@ -90,17 +90,19 @@ def test_normalise_calls_units_and_timezone(spark):
     assert out["M"].call_start_ts_utc == "2026-05-10 09:00"
     assert out["S"].call_start_ts_utc == "2026-05-10 09:00"
 
-    # Decided (assumption 5): every region, AU included, is kept as stored UTC.
-    assert set(DEFAULT_SOURCE_TIMEZONE.values()) == {"UTC"}
-    assert out["AU"].call_start_ts_utc == "2026-05-10 09:00"
+    # Decided (assumption 5): AU is Sydney local time, converted DST-aware: AEST +10 in
+    # May, AEDT +11 before DST ended on 5 April 2026. UK, CA and US are UTC, untouched.
+    assert DEFAULT_SOURCE_TIMEZONE == {
+        "UK": "UTC", "AU": "Australia/Sydney", "CA": "UTC", "US": "UTC"
+    }  # fmt: skip
+    assert out["AU"].call_start_ts_utc == "2026-05-09 23:00"
+    assert out["AU"].call_end_ts_utc == "2026-05-09 23:01"
+    assert out["AU_DST"].call_start_ts_utc == "2026-04-01 22:00"
+    assert out["S"].call_start_ts_utc == "2026-05-10 09:00"
 
-    # The reversal route: declaring AU as Sydney local shifts by the correct offset,
-    # AEST +10 in May and AEDT +11 before DST ended on 5 April 2026. UK is untouched.
-    sydney = by_id(normalise_calls(uk, ca, {**DEFAULT_SOURCE_TIMEZONE, "AU": "Australia/Sydney"}))
-    assert sydney["AU"].call_start_ts_utc == "2026-05-09 23:00"
-    assert sydney["AU"].call_end_ts_utc == "2026-05-09 23:01"
-    assert sydney["AU_DST"].call_start_ts_utc == "2026-04-01 22:00"
-    assert sydney["S"].call_start_ts_utc == "2026-05-10 09:00"
+    # The reversal route: declaring AU as UTC keeps the stored value.
+    stored = by_id(normalise_calls(uk, ca, {**DEFAULT_SOURCE_TIMEZONE, "AU": "UTC"}))
+    assert stored["AU"].call_start_ts_utc == "2026-05-10 09:00"
 
 
 def test_ca_us_keeps_its_own_sla_wrap_up_and_compliance_columns(spark):

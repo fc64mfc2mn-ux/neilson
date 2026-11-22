@@ -285,13 +285,18 @@ def test_no_surrogate_key_collisions(spark, real_gold, table):
 
 @pytest.mark.slow
 def test_surrogate_keys_identical_when_rebuilt_from_empty_gold(spark, real_gold):
-    """Build the dimensions twice from an empty gold layer: same keys, row for row."""
+    """Build the dimensions twice with no dimension tables: same keys, row for row.
+
+    Deletes only the dimension tables. The lakehouse is shared by the session, so
+    deleting the whole gold directory would remove the facts other test files built
+    (real_gold_all) and fail them later in the run."""
     config, _ = real_gold
-    gold_root = Path(table_path(config, "gold.dim_date")).parent
+    dims = [*DIM_KEYS, "gold.dim_agent_seniority"]
     builds = []
     for n in (1, 2):
-        shutil.rmtree(gold_root, ignore_errors=True)
-        assert not gold_root.exists()
+        for table in dims:
+            shutil.rmtree(Path(table_path(config, table)), ignore_errors=True)
+        assert not any(Path(table_path(config, t)).exists() for t in dims)
         build_dimensions(spark, {**config, "run_id": f"test-gold-empty-{n}"})
         builds.append(_key_rows(spark, config))
     # And once more over the existing tables (a plain rerun).

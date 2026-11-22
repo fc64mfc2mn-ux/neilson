@@ -22,6 +22,8 @@ with only one of the two keys is matched on the key it has.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from pyspark.sql import Column, DataFrame, Window
 from pyspark.sql import functions as F
 
@@ -79,16 +81,20 @@ def _components(links: list[tuple[str, str]]) -> dict[str, str]:
     return {x: find(x) for x in parent}
 
 
-def dedupe_leads(leads: DataFrame) -> tuple[DataFrame, DataFrame]:
+def dedupe_leads(
+    leads: DataFrame, phone_normaliser: Callable[[str], Column] = normalise_phone
+) -> tuple[DataFrame, DataFrame]:
     """Return (survivors, lead_dedup_map).
 
     `leads` needs `lead_id`, `created_at_utc`, `email` and `phone`; `lead_id`
     must be unique. Survivors keep every input column, plus `email_norm`,
-    `phone_norm` and `dedup_cluster_size`.
+    `phone_norm` and `dedup_cluster_size`. `phone_normaliser` is digits-only
+    (the decided rule); the E.164 alternative is checked in
+    `findings_leads.sql: phone_normalisation_extra_links`.
     """
     spark = leads.sparkSession
     normed = leads.withColumn("email_norm", normalise_email("email")).withColumn(
-        "phone_norm", normalise_phone("phone")
+        "phone_norm", phone_normaliser("phone")
     )
     links = _links(normed)
     if links.count() > MAX_LINKS:

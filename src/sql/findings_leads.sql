@@ -159,3 +159,60 @@ WHERE NOT (
 )
 GROUP BY region_code, shape
 ORDER BY region_code, shape;
+
+-- name: phone_normalisation_extra_links
+-- Step 12: would E.164 phones (as hashed in gold.dim_lead) find duplicates that the
+-- decided digits-only rule misses? Same 48h chained rule over the leads in dedup scope.
+-- extra_links = E.164 links joining two leads that silver put in different clusters.
+-- Asserted in tests/test_dedupe_leads.py (with a rerun of the dedup itself).
+WITH raw AS (
+    SELECT * FROM bronze.leads_raw
+    WHERE _ingest_ts = (SELECT MAX(_ingest_ts) FROM bronze.leads_raw)
+),
+scope AS (
+    SELECT r.lead_id,
+           TO_TIMESTAMP(r.created_at_utc, "yyyy-MM-dd'T'HH:mm:ssX") AS ts,
+           TRIM(r.phone) AS p,
+           NULLIF(REGEXP_REPLACE(r.phone, '[^0-9]', ''), '') AS d,
+           m.surviving_lead_id
+    FROM raw r
+    JOIN silver.lead_dedup_map m ON r.lead_id = m.source_lead_id
+),
+norm AS (
+    SELECT *,
+        CASE
+            WHEN p LIKE '+%' THEN CASE WHEN LENGTH(d) BETWEEN 11 AND 13 THEN CONCAT('+', d) END
+            WHEN LENGTH(d) = 12 AND d LIKE '44%' THEN CONCAT('+', d)
+            WHEN LENGTH(d) = 11 AND d LIKE '0%' THEN CONCAT('+44', SUBSTR(d, 2))
+            WHEN LENGTH(d) = 11 AND d LIKE '61%' THEN CONCAT('+', d)
+            WHEN LENGTH(d) = 10 AND d LIKE '0%' THEN CONCAT('+61', SUBSTR(d, 2))
+            WHEN LENGTH(d) = 11 AND d LIKE '1%' THEN CONCAT('+', d)
+            WHEN LENGTH(d) = 10 AND d RLIKE '^[2-9]' THEN CONCAT('+1', d)
+        END AS e164
+    FROM scope
+),
+lagged AS (
+    SELECT 'e164' AS rule, e164 AS k, ts, surviving_lead_id,
+           LAG(ts) OVER (PARTITION BY e164 ORDER BY ts, lead_id) AS prev_ts,
+           LAG(surviving_lead_id) OVER (PARTITION BY e164 ORDER BY ts, lead_id) AS prev_surv
+    FROM norm WHERE e164 IS NOT NULL
+    UNION ALL
+    SELECT 'digits', d, ts, surviving_lead_id,
+           LAG(ts) OVER (PARTITION BY d ORDER BY ts, lead_id),
+           LAG(surviving_lead_id) OVER (PARTITION BY d ORDER BY ts, lead_id)
+    FROM norm WHERE d IS NOT NULL
+),
+links AS (
+    SELECT * FROM lagged
+    WHERE prev_ts IS NOT NULL
+      AND UNIX_TIMESTAMP(ts) - UNIX_TIMESTAMP(prev_ts) <= 48 * 3600
+)
+SELECT
+    (SELECT COUNT(*) FROM links WHERE rule = 'digits') AS digit_links,
+    (SELECT COUNT(*) FROM links WHERE rule = 'e164') AS e164_links,
+    (SELECT COUNT(*) FROM links WHERE rule = 'e164' AND surviving_lead_id <> prev_surv)
+        AS extra_links,
+    (SELECT COUNT(*) FROM norm WHERE d IS NOT NULL AND e164 IS NULL) AS unparseable_phones,
+    (SELECT COUNT(*) FROM (SELECT e164 FROM norm WHERE e164 IS NOT NULL
+                           GROUP BY e164 HAVING COUNT(DISTINCT d) > 1))
+        AS e164_numbers_written_two_ways;

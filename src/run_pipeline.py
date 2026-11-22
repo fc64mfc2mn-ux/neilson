@@ -4,15 +4,14 @@ Reads the config file named on the command line (see src/common/config.py),
 runs bronze ingestion for all twelve input files, builds silver, then builds
 gold, in that order.
 
-Stages that are not implemented yet raise NotImplementedError. They are logged
-as skipped and listed in the run summary, so the runner works end to end while
-the stages are built one plan step at a time. Any other error fails the run
-with exit code 1.
+Every stage must run. A stage that is not built (NotImplementedError) or fails
+stops the run with exit code 1; nothing is skipped (CLAUDE.md rule 11).
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import uuid
 from collections.abc import Callable
@@ -47,6 +46,25 @@ STAGES: list[tuple[str, Stage]] = [
     ("gold.build_facts", build_facts),
     ("gold.build_lead_funnel", build_lead_funnel),
 ]
+
+
+class StageFailedError(RuntimeError):
+    """A stage raised: the run stops there."""
+
+
+def run_stages(
+    spark: SparkSession, config: dict, stages: list[tuple[str, Stage]], log: logging.Logger
+) -> None:
+    """Run every stage in order; the first that is unbuilt or fails stops the run."""
+    for name, stage in stages:
+        log.info("Stage %s: start", name)
+        try:
+            stage(spark, config)
+        except NotImplementedError as exc:
+            raise StageFailedError(f"Stage {name} is not implemented") from exc
+        except Exception as exc:
+            raise StageFailedError(f"Stage {name} failed: {exc}") from exc
+        log.info("Stage %s: done", name)
 
 
 def new_run_id() -> str:
@@ -99,29 +117,15 @@ def main(argv: list[str] | None = None) -> int:
         spark.conf.get("spark.sql.session.timeZone"),
     )
 
-    skipped: list[str] = []
     try:
-        for name, stage in STAGES:
-            log.info("Stage %s: start", name)
-            try:
-                stage(spark, config)
-            except NotImplementedError:
-                log.warning("Stage %s: not implemented yet, skipped", name)
-                skipped.append(name)
-                continue
-            log.info("Stage %s: done", name)
+        run_stages(spark, config, STAGES, log)
     except Exception:
         log.exception("Pipeline failed")
         return 1
     finally:
         stop_spark(spark)
 
-    log.info(
-        "Pipeline finished: %d stages run, %d skipped %s",
-        len(STAGES) - len(skipped),
-        len(skipped),
-        skipped,
-    )
+    log.info("Pipeline finished: all %d stages run", len(STAGES))
     return 0
 
 

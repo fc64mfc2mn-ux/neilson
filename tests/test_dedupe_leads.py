@@ -4,10 +4,16 @@ leads, and `lead_dedup_map` has 8 rows."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
+import pytest
+from pyspark.sql import functions as F
+
+from src.common.findings import run_finding
 from src.silver.dedupe_leads import dedupe_leads, normalise_email, normalise_phone
 
 T0 = datetime(2026, 4, 1, 9, 0, 0)
+FINDINGS_LEADS = Path(__file__).resolve().parents[1] / "src" / "sql" / "findings_leads.sql"
 SCHEMA = "lead_id string, created_at_utc timestamp, email string, phone string"
 
 
@@ -102,3 +108,51 @@ def test_normalisers(spark):
         (None, None),
         (None, None),
     ]
+
+
+def test_phone_normaliser_is_a_parameter(spark):
+    """Digits-only (the decided rule) does not link a UK number written with and without
+    the country code; E.164 does. Used by the real-data check below."""
+    from src.gold.apply_pii_policy import phone_e164
+
+    leads = _leads(
+        spark,
+        [("P1", T0, None, "+44 7815 778995"), ("P2", T0 + timedelta(hours=3), None, "07815778995")],
+    )
+    _, digits = dedupe_leads(leads)
+    _, e164 = dedupe_leads(leads, phone_normaliser=phone_e164)
+    assert {r.source_lead_id: r.surviving_lead_id for r in digits.collect()} == {
+        "P1": "P1", "P2": "P2",
+    }  # fmt: skip
+    assert {r.source_lead_id: r.surviving_lead_id for r in e164.collect()} == {
+        "P1": "P1", "P2": "P1",
+    }  # fmt: skip
+
+
+@pytest.mark.slow
+def test_phone_normalisation_extra_links(spark, real_leads):
+    """The 48h email-or-phone rule with E.164 phones finds the same 758 duplicates.
+
+    The named query counts E.164 links joining two leads that silver put in different
+    clusters (none); the rerun of the real dedup with E.164 phones gives the same map.
+    """
+    from src.bronze.ingest import latest_batch
+    from src.common.tables import read_table
+    from src.gold.apply_pii_policy import phone_e164
+    from src.silver.leads import LEADS_SOURCE, conform_leads
+
+    config, _, _ = real_leads
+    r = run_finding(spark, FINDINGS_LEADS, "phone_normalisation_extra_links")[0]
+    assert r.extra_links == 0
+    assert r.unparseable_phones == 0
+    assert r.e164_links >= r.digit_links > 0
+
+    silver_map = read_table(spark, config, "silver.lead_dedup_map")
+    in_scope = conform_leads(latest_batch(read_table(spark, config, LEADS_SOURCE))).join(
+        silver_map.select(F.col("source_lead_id").alias("lead_id")), "lead_id"
+    )
+    _, e164_map = dedupe_leads(in_scope, phone_normaliser=phone_e164)
+    dupes = e164_map.where("source_lead_id != surviving_lead_id").count()
+    assert dupes == 758
+    pairs = lambda m: sorted(m.select("source_lead_id", "surviving_lead_id").collect())  # noqa: E731
+    assert pairs(e164_map) == pairs(silver_map)

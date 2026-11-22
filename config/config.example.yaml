@@ -119,6 +119,44 @@ spend:
     rescaled_band: [0.5, 2.0]
     divisor: 100
 
+# DQ gate (python -m src.dq_gate; docs/RUNBOOK.md "Data-quality gates and thresholds").
+# One line per error-severity check: the count per full run that the register predicts,
+# its defect, the register's evidence and the test that proves the count. Built from
+# docs/DEFECT_REGISTER.md, not copied from a run. Fails above a line, on an error check
+# with no line, or on a total above the sum (602); warns below a line.
+dq_gate:
+  expected_errors:
+    - check_name: lead_pk_conflict
+      defect_id: 2
+      expected: 6
+      register: "3 ids appear twice; both rows of each are quarantined"
+      test: tests/test_silver_leads.py::test_lead_ids_reconcile
+    - check_name: lead_unidentifiable
+      defect_id: 4
+      expected: 35
+      register: "35 leads with both email and phone null"
+      test: tests/test_silver_leads.py::test_quarantine_and_flag_counts
+    - check_name: fx_rate_missing
+      defect_id: 12
+      expected: 1
+      register: "No CAD rate for 2026-06: one missing currency-month"
+      test: tests/test_silver_reference.py::test_real_missing_cad_june_is_an_error_not_a_null
+    - check_name: spend_fx_rate_missing
+      defect_id: 12
+      expected: 180
+      register: "180 distinct CAD June spend rows (187 with copies; copies go first)"
+      test: tests/test_silver_spend.py::test_spend_dq_counts
+    - check_name: call_timestamp_unparseable
+      defect_id: 14
+      expected: 0
+      register: "Every call timestamp parses once the per-file formats are applied"
+      test: tests/test_silver_calls.py::test_call_rows_reconcile_rule_by_rule
+    - check_name: call_end_before_start
+      defect_id: 16
+      expected: 380
+      register: "380 distinct calls end before they start"
+      test: tests/test_silver_calls.py::test_call_quarantine_and_flag_counts
+
 lakehouse:
   local_root: lakehouse
   azure_root: abfss://lakehouse@nfsdatalakedev.dfs.core.windows.net

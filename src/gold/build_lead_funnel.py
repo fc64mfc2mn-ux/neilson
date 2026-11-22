@@ -32,7 +32,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from pyspark.sql import DataFrame, SparkSession, Window
+from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 
 from src.bronze.ingest import latest_batch
@@ -44,6 +44,7 @@ log = logging.getLogger("northgate.gold")
 FUNNEL_COLUMNS = (
     "lead_key",
     "lead_created_ts_utc",
+    "lead_created_date_key",
     "region_key",
     "campaign_key",
     "channel_key",
@@ -54,6 +55,8 @@ FUNNEL_COLUMNS = (
     "call_attempt_count",
     "connected_call_count",
     "minutes_to_first_call",
+    "first_call_bucket",
+    "first_call_bucket_sort",
     "within_first_call_sla_flag",
     "quoted_flag",
     "application_flag",
@@ -68,6 +71,28 @@ FUNNEL_COLUMNS = (
 QUOTED = ("QUOTED", "APPLICATION_STARTED", "SOLD")
 APPLIED = ("APPLICATION_STARTED", "SOLD")
 ALL_REGIONS = "ALL"
+
+
+# Time-to-first-call distribution (step 16b): label and upper bound in minutes, closed
+# below and open above; the last bucket has no upper bound. Never called: null.
+FIRST_CALL_BUCKETS = (
+    ("0-15 min", 15),
+    ("15-30 min", 30),
+    ("30-60 min", 60),
+    ("1-4 h", 240),
+    ("4-24 h", 1440),
+    ("Over 24 h", None),
+)
+
+
+def first_call_bucket(minutes: Column) -> tuple[Column, Column]:
+    """(label, sort order 1 to 6) for minutes to first call; null stays null."""
+    label, sort = F.lit(None).cast("string"), F.lit(None).cast("int")
+    for i, (name, upper) in reversed(list(enumerate(FIRST_CALL_BUCKETS, start=1))):
+        cond = minutes.isNotNull() if upper is None else minutes < upper
+        label = F.when(cond, F.lit(name)).otherwise(label)
+        sort = F.when(cond, F.lit(i)).otherwise(sort)
+    return label, sort
 
 
 @dataclass(frozen=True)
@@ -163,9 +188,11 @@ def lead_funnel(
         (F.unix_timestamp("first_call_ts_utc") - F.unix_timestamp("lead_created_ts_utc")) / 60
     ).cast("decimal(12,2)")
     has_policy = F.col("policy_key").isNotNull()
+    bucket, bucket_sort = first_call_bucket(minutes)
     return df.select(
         "lead_key",
         "lead_created_ts_utc",
+        "lead_created_date_key",
         "region_key",
         "campaign_key",
         "channel_key",
@@ -176,6 +203,8 @@ def lead_funnel(
         F.coalesce("call_attempt_count", F.lit(0)).cast("int").alias("call_attempt_count"),
         F.coalesce("connected_call_count", F.lit(0)).cast("int").alias("connected_call_count"),
         minutes.alias("minutes_to_first_call"),
+        bucket.alias("first_call_bucket"),
+        bucket_sort.alias("first_call_bucket_sort"),
         F.coalesce(minutes <= F.col("sla_first_call_minutes"), F.lit(False)).alias(
             "within_first_call_sla_flag"
         ),

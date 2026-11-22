@@ -8,7 +8,13 @@ from decimal import Decimal
 
 from pyspark.sql import functions as F
 
-from src.gold.build_lead_funnel import FUNNEL_COLUMNS, bridge_lead_call, lead_funnel
+from src.gold.build_lead_funnel import (
+    FIRST_CALL_BUCKETS,
+    FUNNEL_COLUMNS,
+    bridge_lead_call,
+    first_call_bucket,
+    lead_funnel,
+)
 
 T0 = "2026-05-11 10:00:00"  # a Monday, UTC
 
@@ -24,11 +30,12 @@ def _fixture(spark):
     fact_lead = _ts(
         spark,
         [
-            (1, T0, 100, 10, 20, 30, True),
-            (2, T0, 100, 10, 20, 30, False),
-            (3, T0, 100, -1, -1, 30, True),
+            (1, T0, 20260511, 100, 10, 20, 30, True),
+            (2, T0, 20260511, 100, 10, 20, 30, False),
+            (3, T0, 20260511, 100, -1, -1, 30, True),
         ],
-        "lead_key long, lead_created_ts_utc string, region_key long, campaign_key long, "
+        "lead_key long, lead_created_ts_utc string, lead_created_date_key int, "
+        "region_key long, campaign_key long, "
         "channel_key long, product_key long, lead_in_business_hours_flag boolean",
         ["lead_created_ts_utc"],
     )
@@ -70,7 +77,7 @@ def test_lead_funnel_row_count_equals_distinct_lead_key(spark):
     # The bridge is call grain, not the funnel: 5 rows for 2 leads with calls.
     bridge = bridge_lead_call(fact_call)
     assert bridge.count() == 5 and bridge.count() != funnel.count()
-    assert tuple(funnel.columns[:21]) == FUNNEL_COLUMNS[:21]
+    assert tuple(funnel.columns) == FUNNEL_COLUMNS
 
 
 def test_lead_funnel_carries_the_lead_to_call_to_policy_path(spark):
@@ -100,6 +107,24 @@ def test_lead_funnel_carries_the_lead_to_call_to_policy_path(spark):
     )  # fmt: skip
     assert (three.campaign_key, three.first_call_agent_key) == (-1, -1)
     assert one.lead_in_business_hours_flag is True and two.lead_in_business_hours_flag is False
+    # Step 16b: the lead-created date key, and the first-call bucket for the visual.
+    assert one.lead_created_date_key == 20260511
+    assert (one.first_call_bucket, one.first_call_bucket_sort) == ("0-15 min", 1)
+    assert (three.first_call_bucket, three.first_call_bucket_sort) == ("30-60 min", 3)
+    assert (two.first_call_bucket, two.first_call_bucket_sort) == (None, None)  # never called
+
+
+def test_first_call_buckets_are_closed_below_and_open_above(spark):
+    edges = [0, 14.99, 15, 29.99, 30, 59.99, 60, 239.99, 240, 1439.99, 1440, 10_000, None]
+    df = spark.createDataFrame(
+        [(None if m is None else Decimal(str(m)),) for m in edges], "m decimal(12,2)"
+    )
+    label, sort = first_call_bucket(F.col("m"))
+    got = [(r.label, r.sort) for r in df.select(label.alias("label"), sort.alias("sort")).collect()]
+    names = [b[0] for b in FIRST_CALL_BUCKETS]
+    assert names == ["0-15 min", "15-30 min", "30-60 min", "1-4 h", "4-24 h", "Over 24 h"]
+    want = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, None]
+    assert got == [(None if w is None else names[w - 1], w) for w in want]
 
 
 def test_bridge_lead_call_orders_calls_per_lead_and_drops_unresolved_leads(spark):

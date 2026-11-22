@@ -186,6 +186,7 @@ and `recording_url` (tier 3); policy `underwriting_decision` (tier 3); agent `ag
 | `gold.fact_marketing_spend_daily` | `outside_campaign_dates` | 0 | Flag (defect 9) |
 | `gold.fact_lead_funnel` | `lead_key` | 1 | One row per surviving lead |
 | `gold.fact_lead_funnel` | `lead_created_ts_utc` | 1 | Kept |
+| `gold.fact_lead_funnel` | `lead_created_date_key` | 1 | From `fact_lead` (step 16b) |
 | `gold.fact_lead_funnel` | `region_key` | 1 | Strict |
 | `gold.fact_lead_funnel` | `campaign_key` | 1 | First touch: the surviving (earliest) lead's campaign |
 | `gold.fact_lead_funnel` | `channel_key` | 1 | As `fact_lead` |
@@ -196,6 +197,8 @@ and `recording_url` (tier 3); policy `underwriting_decision` (tier 3); agent `ag
 | `gold.fact_lead_funnel` | `call_attempt_count` | 1 | Calls in `bridge_lead_call` |
 | `gold.fact_lead_funnel` | `connected_call_count` | 1 | Assumption 2 |
 | `gold.fact_lead_funnel` | `minutes_to_first_call` | 1 | Null when never called |
+| `gold.fact_lead_funnel` | `first_call_bucket` | 1 | Distribution bucket of `minutes_to_first_call`; null if never called |
+| `gold.fact_lead_funnel` | `first_call_bucket_sort` | 1 | Sort order of the bucket, 1 to 6 |
 | `gold.fact_lead_funnel` | `within_first_call_sla_flag` | 1 | Against the region's SLA; false when never called |
 | `gold.fact_lead_funnel` | `quoted_flag` | 1 | Quoted or later call, or a policy |
 | `gold.fact_lead_funnel` | `application_flag` | 1 | Application or sale call, or a policy |

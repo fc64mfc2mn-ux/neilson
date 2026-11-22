@@ -67,6 +67,21 @@ polish a lower one.
     fix it.
 11. **The skip-if-not-implemented behaviour in the runner is removed by step 12.**
 
+Cost and speed rules (do this in a small commit before step 8):
+1. In src/common/spark_session.py set spark.sql.shuffle.partitions to 8 (configurable),
+   spark.default.parallelism to 8, spark.ui.enabled to false, and
+   spark.sql.adaptive.enabled to true. Write a test that the session has these
+   values, run the slow suite once before and after, and report both times in the
+   AI_LOG. Keep UTC.
+2. Never run the full test suite or the full pipeline to check a small change. Run
+   only the tests for the file you touched: pytest tests/test_x.py -q.
+3. The slow set (-m slow) runs once per step, at the end, in the background, with
+   output limited to the last 20 lines.
+4. Do not rm -rf lakehouse and rebuild unless the change is to bronze or the schema.
+5. Do not re-read files already read this session, and do not print whole files or
+   long logs; use head, tail or grep.
+6. Keep reports to what changed, counts that matter and open decisions.
+
 ## Commands
 
 ```bash

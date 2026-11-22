@@ -504,3 +504,23 @@ Digital Acquisition Lead. (4) A timing probe was run from /tmp without the repo 
 path, and once under a tool timeout with grep buffering, so it showed nothing.
 Open: 675 policies have no GBP premium (no CAD June rate, no July rates), assumption 27;
 the attribution window (assumption 10) is still not applied to any measure.
+
+### 2026-11-22  Step 13: the six named tests, the DQ gate and CI
+Tool: Claude Code (VS Code extension), model Claude Opus 5.5
+Prompt (verbatim, opening): "Step 13 is approved: the six named tests, CI, and the DQ
+gate (PLAN.md step 13)."
+What it produced: `src/dq_gate.py` (`python -m src.dq_gate`): reads the latest run's
+error rows, fails above a line, on an error check with no line, or on a total above the
+sum; warns below a line. Six expected lines in config, each with its register defect,
+evidence and proving test, sum 602; on the last full run all six match (602 = 602).
+`test_dq_gates.py` (breach fails, clean passes, unknown check fails, latest run only,
+lines match the register); `test_fx_conversion.py` (cents and dollars give the same GBP;
+a month with no rate is split out for quarantine), using two helpers extracted from
+`build_spend` with no behaviour change (slow spend tests unchanged). RUNBOOK gate
+section; CI: lint, fast tests, pipeline, gate on every push; slow set weekly or on demand.
+The legacy parity test stays skipped with its reason (step 14).
+Mistakes caught: (1) the first small slice of this prompt (675 breakdown, attribution
+query, assumptions 10 and 20, exemption tests, 602 in CLAUDE.md) had already been done
+and pushed in the previous slice; it was not redone. (2) `gh` is not installed, so action
+versions and the CI result came from the public GitHub API. (3) The prompt asked for
+setup-java v5 though v6 is the latest; v5 was used as asked and the gap reported.

@@ -211,4 +211,6 @@ and 615 call agents resolve to UNKNOWN); PII policy with `gold.dim_lead` (47,201
 scan as the last stage; the runner stops on any unbuilt or failing stage.
 Decisions slice after step 12 done (policy GBP coverage, attribution window not applied,
 null `lead_key` for unresolvable call leads, open questions a to i).
-Next: step 13 of `docs/PLAN.md` (tests, CI, DQ gate).
+Step 13 done: the six named tests (legacy skipped until step 14), `src/dq_gate.py` with
+expected error lines in config (602 per run), CI with lint, fast tests, pipeline and gate.
+Next: step 14 of `docs/PLAN.md`.

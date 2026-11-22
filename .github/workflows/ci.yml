@@ -3,20 +3,29 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"  # Mondays 05:00 UTC: the slow real-data test set
 
 jobs:
   build:
+    # Every push and pull request: lint, fast tests, the full pipeline on the committed
+    # data, then the data-quality gate on that run (docs/RUNBOOK.md, "Data-quality gates
+    # and thresholds"). A gate failure fails the build.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+          cache: pip
 
-      - name: Set up Java (required for PySpark)
-        uses: actions/setup-java@v4
+      - name: Set up Java 17 (PySpark)
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -25,16 +34,44 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Lint
-        run: ruff check .
+        run: |
+          ruff check .
+          ruff format --check .
 
-      - name: Test
-        run: pytest
+      - name: Fast tests
+        run: pytest -m "not slow" -q
+
+      - name: Run the pipeline on the committed data
+        # Creates config/secrets.json with a random salt on this runner; never committed.
+        run: python -m src.run_pipeline --config config/config.yaml
 
       - name: Data-quality gate
-        run: |
-          # Placeholder command. Replace with the real gate before this passes.
-          # It must fail the build if the row count in silver.dq_exception,
-          # for the run just produced, exceeds the threshold stated in
-          # docs/RUNBOOK.md's "Data-quality gates and thresholds" section.
-          # A gate that always exits 0 does not satisfy this requirement.
-          echo "TODO: implement the data-quality gate against silver.dq_exception" && exit 1
+        # Exit 1 when an error check exceeds its expected count, an error check has no
+        # expected line, or the error total exceeds the sum of the lines.
+        run: python -m src.dq_gate --config config/config.yaml
+
+  slow-tests:
+    # The real-data test set (pytest -m slow): weekly and on demand, not on every push.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up Java 17 (PySpark)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Slow tests
+        run: pytest -m slow -q

@@ -4,7 +4,7 @@ The semantic model on the gold export, for building by hand in Power BI Desktop 
 Windows VM. Measures: `powerbi/measures.dax`. Values to check against:
 `powerbi/expected_values.csv` (from `python -m src.powerbi_expected --config
 config/config.yaml`). RLS and `bridge_user_region` are added in step 17 (last section); the
-Connected Call measure is step 18.
+`Connected Call to Policy Conversion Rate` is step 18 (last section).
 
 ## Tables
 
@@ -66,7 +66,7 @@ Turn off autodetect and create these by hand:
 | `dim_date[date_key]` | `fact_marketing_spend_daily[date_key]` | Yes |
 | `dim_date[date_key]` | `fact_lead_funnel[lead_created_date_key]` | Yes |
 | `dim_date[date_key]` | `fact_policy[lead_created_date_key]` | Yes |
-| `dim_date[date_key]` | `fact_policy[policy_start_date_key]` | **No**: used with `USERELATIONSHIP` (Average Annual Premium; the Ops measure at step 18) |
+| `dim_date[date_key]` | `fact_policy[policy_start_date_key]` | **No**: used with `USERELATIONSHIP` (Average Annual Premium; and `Connected Call to Policy Conversion Rate`) |
 | `dim_date[date_key]` | `fact_call[call_date_key]` | Yes |
 | `dim_region[region_key]` | `region_key` on all four facts | Yes |
 | `dim_channel[channel_key]` | `channel_key` on spend, funnel, policy | Yes |
@@ -231,3 +231,29 @@ filtered through the `dim_region` relationships.
 
 `rls_view_not_active_all_data.png` shows the same page with no role active (all data), and
 `rls_role_definition.png` the role's DAX filter.
+
+## Connected Call to Policy Conversion Rate (step 18)
+
+Paste the new block of `measures.dax` into the `Key Measures` table (folder `2. Funnel`,
+format `0.00%`). It needs no new table or relationship, and the .pbix is not changed by this
+step. How it works: the business-hours lead set is read once from `fact_lead_funnel`, with
+the lead-created date filter switched off (`CROSSFILTER ... NONE`), and applied to
+`fact_policy` and `fact_call` with `TREATAS` on `lead_key`. Policies then use the
+policy-start date (`USERELATIONSHIP`), calls the active call date. Region, product and
+`dim_lead_nopii` slicers reach both facts as before.
+
+**Check in Desktop** against `expected_values.csv` (all, four regions, months, and the new
+quarter rows) and the new Q2 query at the end of `measures.dax`:
+
+| Slice | Expected |
+| --- | ---: |
+| All dates | 24.0142% (1,760 / 7,329) |
+| Q2 2026 | 18.5564% (1,324 / 7,135) |
+| AU / CA / UK / US | 12.03% / 26.95% / 25.20% / 28.41% |
+| April / May / June | 8.56% / 20.50% / 25.32% |
+
+**Limits.** July (and Q3) shows 224.7%: policies start to 31 July, calls end on 19 July.
+Do not put this measure on a page that shows July. Funnel columns other than the
+business-hours set do not reach the policies (limit 5 above). The DAX and the SQL agree on
+region only because a lead, its calls and its policies always share one region (a slow test
+checks it). `docs/KPI_RECONCILIATION.md` is the bridge from Lead to Policy Conversion Rate.

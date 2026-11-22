@@ -604,3 +604,22 @@ first full slow run had 16 failures and 7 errors, and I first read pytest's pipe
 code 0 as a pass. Cause: since step 15, an empty-gold rebuild test deleted the whole
 shared test gold directory, after `test_export_powerbi` had built the facts there. Fixed
 by deleting only the dimension tables; the rerun has 103 passed.
+
+### 2026-11-22  Step 18: Connected Call to Policy Conversion Rate and the bridge
+Tool: Claude Code (VS Code extension), model Claude Sonnet 5.5
+Prompt (verbatim, opening): "Step 18: second KPI, Connected Call to Policy Conversion Rate, plus the reconciliation to Lead to Policy Conversion Rate."
+What it produced: the SQL expected values (all, region, month, quarter), the DAX measure,
+`src/kpi_reconciliation.py` and its CSV, a pandas recomputation in the tests,
+`docs/KPI_RECONCILIATION.md`, and updates to the decision log and `MODEL_DESIGN.md`.
+Stopped and asked before building: the decision log does not say whether business hours
+limits the policies as well as the calls, and calls have no policy-start date. The human
+chose both sides and policy-start date for policies with call date for calls.
+Wrong assumptions caught: (1) The indicative 20.5% from the earlier pass cannot be
+reproduced by any variant of the definition (18.56% as built; nearest variant 20.11%), so
+the doc says so instead of tuning filters to hit it. (2) I expected the business-hours
+filter to move the rate; it moves it by 0.06 points, since both sides shrink by about 61%.
+(3) July's rate is 224.7%, because policies run to 31 July and calls stop on 19 July: now
+a stated limit. (4) The new measure broke the old fixtures, since every expected_* query
+runs over the shared fixture; the fixture gained the columns. (5) The old test asserted
+the measure did not exist; changed on purpose. (6) `python` was not on the PATH in a fresh
+shell, so a scripted edit failed silently once; caught by the next test run.

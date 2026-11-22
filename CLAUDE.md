@@ -227,4 +227,7 @@ date table), measure values checked against `powerbi/expected_values.csv` (scree
 Step 17 done: `Regional_Analyst` RLS on `USERPRINCIPALNAME()` against
 `bridge_user_region`, View as evidence for `anz.manager` (AU+US), `uk.analyst` (UK) and an
 unmapped user (zero rows); see `powerbi/MODEL_DESIGN.md`.
-Next: step 18, the Connected Call measure and the reconciliation view.
+Step 18 done in the repo (not yet in the .pbix): `Connected Call to Policy Conversion Rate`
+in `powerbi/measures.dax` (Q2 18.56%, all dates 24.01%), expected values, and the bridge in
+`docs/KPI_RECONCILIATION.md` / `powerbi/kpi_reconciliation.csv`. The human pastes the measure
+into the model on the VM and checks it against `expected_values.csv`.

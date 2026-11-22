@@ -22,11 +22,12 @@ A call-grain ratio counts a lead once per connected call, so it is a productivit
 not a share of opportunities. Forcing either grain on the other director would silently
 change what the number means, which the BI Manager's note forbids.
 
-## Indicative size of the gap (pandas pass, Q2 2026, all regions; reproduce in the pipeline)
+## Indicative size of the gap (early pandas pass, Q2 2026, all regions; superseded by `KPI_RECONCILIATION.md`)
 
 - Marketing-style, raw leads: 9.9% (4,766 linked policies / 47,987 leads).
 - Marketing-style, deduplicated leads: 10.1% (757 duplicate leads removed, 1.6%).
-- Ops-style (policies started in Q2 / connected calls): 20.5%.
+- Ops-style (policies started in Q2 / connected calls): 20.5%. Not reproduced: the built
+  measure gives 18.56% (see `KPI_RECONCILIATION.md` for the variants tried).
 - Leads created inside weekday business hours: about 38%; the Ops filter removes about 62%.
 - April-created leads whose policy starts in April: 470 of 1,492.
 
@@ -48,8 +49,12 @@ change what the number means, which the BI Manager's note forbids.
   (CONNECTED, QUOTED, APPLICATION_STARTED, SOLD; assumption 2); non-duplicate leads created
   in business hours (weekdays, region's own timezone; assumption 9); anchored on the
   policy-start date; last-call agent attribution.
-- A reconciliation view stepping from one number to the other, one axis at a time
-  (step 18).
+- A reconciliation view stepping from one number to the other, one axis at a time:
+  `KPI_RECONCILIATION.md` and `powerbi/kpi_reconciliation.csv` (step 18, built).
+- Step 18 confirmed with the human: the business-hours scope applies to both the policies
+  and the connected calls (same leads on both sides), and the date axis is policy start for
+  policies and call date for calls under one date slicer. Q2 2026 result: 1,324 policies /
+  7,135 connected calls = 18.56% (all dates: 1,760 / 7,329 = 24.01%).
 - Both measures exclude NTU policies (assumption 3) and policies with a NULL `lead_key`
   (assumption 11).
 - BI Manager rules: one certified measure per KPI; both grains named and documented; the

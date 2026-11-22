@@ -18,6 +18,7 @@ from src.common.findings import run_finding
 from src.common.tables import read_table
 from src.gold.build_dimensions import UNKNOWN_KEY, build_dim_date
 from src.gold.build_facts import (
+    attach_lead_keys,
     business_hours_flag,
     call_lead_status,
     check_date_keys,
@@ -138,6 +139,34 @@ def test_call_lead_status_separates_ghost_and_quarantined_leads(spark):
     }
 
 
+def test_policies_take_the_leads_date_campaign_and_channel_or_null_without_a_lead(spark):
+    """Step 16b: lead-linked policies carry the lead's keys, so the model needs no merge."""
+    policy = spark.createDataFrame(
+        [(900, 1, True, 77), (901, None, False, 77)],
+        "policy_key long, lead_key long, is_lead_attributed boolean, region_key long",
+    )
+    leads = spark.createDataFrame(
+        [(1, 20260411, 10, 20, 99), (2, 20260412, -1, -1, 99)],
+        "lead_key long, lead_created_date_key int, campaign_key long, channel_key long, "
+        "region_key long",
+    )
+    out = attach_lead_keys(policy, leads)
+    assert out.columns == [
+        "policy_key", "lead_key", "is_lead_attributed", "lead_created_date_key",
+        "campaign_key", "channel_key", "region_key",
+    ]  # fmt: skip
+    rows = {r.policy_key: r for r in out.collect()}
+    assert out.count() == 2  # no row lost or doubled
+    linked, orphan = rows[900], rows[901]
+    assert (linked.lead_created_date_key, linked.campaign_key, linked.channel_key) == (
+        20260411, 10, 20,
+    )  # fmt: skip
+    assert linked.region_key == 77  # the policy's own region is untouched
+    assert (orphan.lead_created_date_key, orphan.campaign_key, orphan.channel_key) == (
+        None, None, None,
+    )  # fmt: skip
+
+
 def test_bridge_user_region_keeps_all_and_maps_two_regions(spark):
     sec = spark.createDataFrame(
         [(" UK.Analyst@northgatelife.example", "UK", "Regional_Analyst"),
@@ -234,6 +263,16 @@ def test_calls_and_policies_without_a_surviving_lead_keep_a_null_lead_key(gold):
     p = t("gold.fact_policy")
     assert p.where("lead_key IS NULL").count() == 405
     assert p.where("is_lead_attributed").count() == 4_767
+    # Step 16b: the lead's date, campaign and channel; null keys without a lead.
+    lead_keys = ("lead_created_date_key", "campaign_key", "channel_key")
+    mismatched = (
+        p.where("is_lead_attributed")
+        .join(t("gold.fact_lead").select("lead_key", *lead_keys).toDF(
+            "lead_key", *[f"l_{c}" for c in lead_keys]), "lead_key")
+        .where(" OR ".join(f"NOT ({c} <=> l_{c})" for c in lead_keys))
+    )  # fmt: skip
+    assert mismatched.count() == 0
+    assert p.where(" AND ".join(f"{c} IS NULL" for c in lead_keys)).count() == 405
     # 35 policies name a call quarantined in silver: no call key, the policy stays.
     assert p.where("call_id IS NOT NULL AND call_key IS NULL").count() == 35
     # No CAD June rate and no July rates: 517 + 158 policies without a GBP premium (defect 12).

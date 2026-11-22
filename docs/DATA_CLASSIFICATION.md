@@ -149,6 +149,9 @@ and `recording_url` (tier 3); policy `underwriting_decision` (tier 3); agent `ag
 | `gold.fact_policy` | `lead_key` | 1 | Null when no surviving lead (assumption 11) |
 | `gold.fact_policy` | `lead_match_status` | 1 | `matched`, `no_lead` or `lead_quarantined` |
 | `gold.fact_policy` | `is_lead_attributed` | 1 | True when `lead_key` is set |
+| `gold.fact_policy` | `lead_created_date_key` | 1 | The surviving lead's created date; null without a lead (step 16b) |
+| `gold.fact_policy` | `campaign_key` | 1 | The lead's first-touch campaign; null without a lead |
+| `gold.fact_policy` | `channel_key` | 1 | The lead's channel; null without a lead |
 | `gold.fact_policy` | `call_key` | 1 | Null when the call is not in `silver.call` |
 | `gold.fact_policy` | `call_id` | 1 | Kept as supplied |
 | `gold.fact_policy` | `agent_key` | 1 | Version valid on the application date |

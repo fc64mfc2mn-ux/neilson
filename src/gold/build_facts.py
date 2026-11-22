@@ -6,7 +6,9 @@
 - `gold.fact_call`: one row per deduplicated call (`silver.call`), seconds
   and UTC throughout. `is_connected` follows assumption 2.
 - `gold.fact_policy`: one row per deduplicated policy (`silver.policy`), with
-  `annual_premium_gbp` at the application month's rate.
+  `annual_premium_gbp` at the application month's rate, and the surviving lead's
+  `lead_created_date_key`, `campaign_key` and `channel_key` (null without a lead), so
+  lead-linked policies follow the lead's date and first-touch campaign (step 16b).
 - `gold.fact_marketing_spend_daily`: date by campaign (`silver.marketing_spend`).
 
 Foreign keys (CLAUDE.md decisions): campaign, channel and agent resolve to
@@ -157,6 +159,22 @@ def call_lead_status(calls: DataFrame, dedup_map: DataFrame, raw_lead_ids: DataF
     return j.withColumn("lead_match_status", status).drop("_src", "_raw")
 
 
+LEAD_KEYS = ("lead_created_date_key", "campaign_key", "channel_key")
+
+
+def attach_lead_keys(policy: DataFrame, leads: DataFrame) -> DataFrame:
+    """Add the surviving lead's date, campaign and channel keys after `is_lead_attributed`.
+    Left join on the unique `lead_key`: a policy with no lead keeps null keys."""
+    keys = leads.select(F.col("lead_key").alias("_lk"), *LEAD_KEYS)
+    joined = policy.join(keys, policy["lead_key"] == keys["_lk"], "left")
+    cols = []
+    for c in policy.columns:
+        cols.append(c)
+        if c == "is_lead_attributed":
+            cols += list(LEAD_KEYS)
+    return joined.select(*cols)
+
+
 def _check(table: str, rows_in: int, rows_out: int) -> None:
     if rows_in != rows_out:
         raise ReconciliationError(f"{table}: {rows_out} rows != {rows_in} from silver")
@@ -240,7 +258,7 @@ def fact_call(calls: DataFrame, dims: dict[str, DataFrame], dedup_map, raw_lead_
     return out, {"agent_key": u_agent}
 
 
-def fact_policy(policy, dims, dedup_map, raw_lead_ids, calls, fx):
+def fact_policy(policy, dims, dedup_map, raw_lead_ids, calls, fx, leads):
     df = call_lead_status(policy, dedup_map, raw_lead_ids)
     df = resolve_agent(df, dims["agent"], day=F.col("application_date"))
     u_agent = df.where(F.col("agent_key") == UNKNOWN_KEY).count()
@@ -280,7 +298,7 @@ def fact_policy(policy, dims, dedup_map, raw_lead_ids, calls, fx):
         "gbp_rate_missing",
         "annual_premium_derived",
     )
-    return out, {"agent_key": u_agent}
+    return attach_lead_keys(out, leads), {"agent_key": u_agent}
 
 
 def fact_spend(spend: DataFrame, dims: dict[str, DataFrame]):
@@ -338,11 +356,13 @@ def build_facts(spark: SparkSession, config: dict) -> list[FactResult]:
                     dim_date, "silver.policy")  # fmt: skip
     check_date_keys(spend, ["spend_date"], dim_date, "silver.marketing_spend")
 
+    lead_fact = fact_lead(lead, dims, t("silver.ref_region"))
     plan = [
-        ("gold.fact_lead", "silver.lead", lead, fact_lead(lead, dims, t("silver.ref_region"))),
+        ("gold.fact_lead", "silver.lead", lead, lead_fact),
         ("gold.fact_call", "silver.call", calls, fact_call(calls, dims, dedup_map, raw_lead_ids)),
         ("gold.fact_policy", "silver.policy", policy,
-         fact_policy(policy, dims, dedup_map, raw_lead_ids, calls, t("silver.fx_rate"))),
+         fact_policy(policy, dims, dedup_map, raw_lead_ids, calls, t("silver.fx_rate"),
+                     lead_fact[0])),
         ("gold.fact_marketing_spend_daily", "silver.marketing_spend", spend,
          fact_spend(spend, dims)),
     ]  # fmt: skip

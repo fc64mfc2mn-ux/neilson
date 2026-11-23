@@ -49,6 +49,7 @@ changes the salt, and with it every hashed key in gold.
 
 It runs bronze, silver, gold, the gold PII scan and the Power BI export in order, in a UTC
 Spark session; a failed stage stops the run with exit code 1. A second run adds no rows.
+A full run takes about 5 to 6 minutes on a Mac (a second run about 3 to 4).
 Then gate the run on data quality:
 
 ```bash
@@ -173,3 +174,5 @@ Cut, in priority order (correct data, tests and reproducible numbers came first)
 2. Power BI roles other than `Regional_Analyst`. They need object-level security.
 3. The DAX Studio performance artefact.
 4. Deploying the Asset Bundle (`databricks.yml` is a stub).
+5. `docs/STANDARDS.md` (stretch). The patterns another engineer would follow are in
+   `CLAUDE.md` (working rules) and `src/common/` (config, DQ, findings helpers).

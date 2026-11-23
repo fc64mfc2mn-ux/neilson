@@ -164,7 +164,7 @@ committed `config/secrets.example.json` has placeholders only. In production:
 
 ## Time spent and what I cut and why
 
-> **TODO (Jason):** actual hours spent.
+> ** actual hours spent. 15**
 
 Cut, in priority order (correct data, tests and reproducible numbers came first):
 

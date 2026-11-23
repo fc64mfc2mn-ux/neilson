@@ -2,7 +2,11 @@
 
 ## Purpose
 
-<!-- What this repo builds and the business question it answers. -->
+Northgate Life's lead-to-policy funnel: marketing spend, leads, contact-centre calls and
+policies, cleaned in a local medallion lakehouse (PySpark and Delta) and served to a Power
+BI model. It answers what a lead costs by channel, how leads turn into policies by region,
+and how fast and how well the contact centre works them. Two certified conversion
+measures replace one disputed one (see `docs/KPI_DECISION_LOG.md`).
 
 ## Prerequisites
 
@@ -18,8 +22,7 @@
   java -version
   ```
 
-  Add the two `export` lines to your shell profile or to `.venv/bin/activate` so they
-  persist.
+  Put the two `export` lines in your shell profile or `.venv/bin/activate`.
 - **Virtual environment and pinned packages** (pyspark, delta-spark, pytest, ruff):
 
   ```bash
@@ -44,10 +47,9 @@ paths. On the first run the pipeline creates `config/secrets.json` (gitignored, 
 permissions) with a random PII hash salt, and reuses it afterwards. Deleting that file
 changes the salt, and with it every hashed key in gold.
 
-The runner checks the config, the input files and the salt, starts a UTC Spark session
-and runs every stage in order: bronze, silver, gold dimensions, `dim_lead`, facts and
-funnel, the gold PII scan, then the Power BI export. Any stage that fails stops the run
-with exit code 1. Then gate the run on data quality:
+It runs bronze, silver, gold, the gold PII scan and the Power BI export in order, in a UTC
+Spark session; a failed stage stops the run with exit code 1. A second run adds no rows.
+Then gate the run on data quality:
 
 ```bash
 python -m src.dq_gate --config config/config.yaml
@@ -55,53 +57,119 @@ python -m src.dq_gate --config config/config.yaml
 
 ### Power BI export
 
-The export is the **last stage of the pipeline**, so the one command above produces it.
-It can also be rerun on its own against an existing lakehouse:
-
-```bash
-python -m src.export_powerbi --config config/config.yaml
-```
-
-It writes one CSV per gold table to `export/powerbi/` (for example `dim_lead.csv`): every
-dimension, fact and bridge plus `dim_lead_nopii`. UTF-8, comma-delimited, header row, ISO
-dates, UTC timestamps (`yyyy-MM-dd HH:mm:ss`), keys as plain integers (all below 2^53),
-empty for nulls; a second export is byte-identical. `export/` is generated and
-gitignored, like `lakehouse/`. No raw PII column can be exported (the export stops);
-`dim_lead.csv` carries hashes and the two health flags (tiers 2 and 3), so the model must
-hide them from roles not cleared for them, and `dim_lead_nopii.csv` has neither.
+The last stage writes one CSV per gold table to `export/powerbi/` (gitignored, like
+`lakehouse/`); rerun it alone with `python -m src.export_powerbi --config
+config/config.yaml`. The export stops if any raw PII column would leave gold. Operating
+the pipeline (failures, reruns, backfill) is in `docs/RUNBOOK.md`.
 
 ## Input data
 
-<!-- What is in data/ and where it comes from. -->
+Twelve read-only sources in `data/` (hashes in `data/MANIFEST.md`): leads, consent
+events, campaigns and daily spend (marketing); two call files and the agent roster
+(contact centre); policies and monthly FX rates (finance); channel, region and the
+user-to-region security map (reference). The legacy procedure and the three stakeholder
+notes are in `data/legacy/` and `data/stakeholder_notes/`. Problems in the inputs are
+findings (`docs/DEFECT_REGISTER.md`), never fixed in place.
 
 ## Output tables
 
-<!-- The bronze, silver and gold tables this pipeline produces. -->
+- **Bronze** (`lakehouse/bronze/`): one `*_raw` table per source, all strings, with
+  `_ingest_ts`, `_source_file`, `_source_row` and `_row_hash`. Append-only: a rerun appends
+  nothing unless a file changed.
+- **Silver**: typed, deduplicated and conformed: `lead` (47,201 surviving leads),
+  `call` (62,829), `policy` (5,172), `marketing_spend` (2,001 rows), plus
+  `consent_current`, `lead_dedup_map`, reference tables, and `dq_exception` (every
+  rejected or flagged row, with its check, defect, key, severity and action).
+- **Gold**: a star schema. Dimensions `dim_date`, `dim_region`, `dim_channel`,
+  `dim_campaign`, `dim_product`, `dim_agent` (SCD2), `dim_agent_seniority`, `dim_lead`,
+  and `dim_lead_nopii`. Facts `fact_lead`, `fact_call`, `fact_policy`,
+  `fact_marketing_spend_daily`, and `fact_lead_funnel` (one row per surviving lead).
+  Bridges `bridge_lead_call` and `bridge_user_region`.
+
+### What is quarantined and why
+
+Quarantined rows leave the silver tables but stay in `silver.dq_exception`. Counts are
+from the latest run (`src/sql/findings_quarantine.sql: quarantine_by_check`):
+
+| Check | Rows | Severity | Why |
+| --- | ---: | --- | --- |
+| `call_exact_duplicate` | 540 | info | The same call row twice |
+| `call_end_before_start` | 380 | error | Impossible duration |
+| `call_start_before_lead` | 251 | warning | Call before its lead exists (after the AU conversion) |
+| `spend_fx_rate_missing` | 180 | error | CAD June spend, no rate (open question 5) |
+| `spend_exact_duplicate` | 40 | info | Exact copies |
+| `lead_unidentifiable` | 35 | error | No email and no phone, so it cannot be deduplicated |
+| `policy_conflicting_duplicate` | 16 | warning | Copies merged; earliest wins (assumption 23) |
+| `policy_exact_duplicate` | 12 | info | Exact copies |
+| `lead_pk_conflict` | 6 | error | 3 `lead_id`s used by two different people; not resolved |
+| `spend_negative` | 3 | warning | Negative spend with nothing to offset |
+
+The 758 duplicate leads are merged, not quarantined (`silver.lead_dedup_map`). Other
+checks flag or correct rows without removing them: for example, 181 minor-unit spend rows
+are divided by 100, and 6,311 calls after a DO_NOT_CALL disposition are flagged. The DQ
+gate expects 602 error rows per run (`docs/RUNBOOK.md`).
 
 ## Semantic model and measures
 
-<!-- What the Power BI model contains and where the measure DAX lives. -->
+`powerbi/northgate_funnel.pbix`: a star schema on the gold CSV export, with a marked date
+table, a `Key Measures` table, the four-visual report page (`powerbi/report_page.png`) and
+the `Regional_Analyst` RLS role. Every measure's DAX, description and format is in
+`powerbi/measures.dax`. The model design and build steps are in
+`powerbi/MODEL_DESIGN.md`. `powerbi/expected_values.csv` holds the values each measure
+should show, computed independently in SQL; they were checked in Desktop (screenshots in
+`powerbi/`). `powerbi/model_walkthrough.mov` is a walkthrough of the report and the model.
 
 ## Usage guidelines, who should use this and how
 
-<!-- Who should use each measure, and who should not. -->
+- **Marketing** uses `Cost Per Lead (GBP)` and `Lead to Policy Conversion Rate` (lead
+  grain, by lead-created date and first-touch campaign).
+- **Sales Operations** uses `Connected Call to Policy Conversion Rate` (call grain,
+  business-hours leads, by policy start, credited to the last-call agent).
+  `docs/KPI_RECONCILIATION.md` explains why the two rates differ (Q2 2026: 9.53% vs 18.56%).
+  Never quote either one as plain "conversion rate".
+- **Regional analysts** see only their mapped regions. Anyone not in
+  `bridge_user_region` sees nothing (`docs/GOVERNANCE.md`).
+- Don't show July for the call-grain rate, or CPL under product or lead slicers
+  (`powerbi/MODEL_DESIGN.md`, limits).
 
 ## Assumptions
 
-<!-- Link to docs/ASSUMPTIONS.md and summarise the headline assumption. -->
+All 28 are in `docs/ASSUMPTIONS.md`. The headline one is entry 13: two certified
+conversion measures, not one. Questions for the data owners are in
+`docs/OPEN_QUESTIONS.md`.
 
 ## Known limitations
 
-<!-- What is out of scope or known to be incomplete. -->
+- Only `Regional_Analyst` RLS is built in Power BI. The other roles, and the Unity Catalog
+  grants, row filter and mask, are designed but not built (`docs/GOVERNANCE.md`).
+- 675 policies have no GBP premium, because there is no CAD June rate and no July rate.
+  `Average Annual Premium (GBP)` states its coverage.
+- The AU first-call gap (median 8.5 hours) remains after the Sydney conversion. It is
+  flagged, not corrected.
+- Business hours have no holiday calendar. The attribution window is not applied.
+- The Power BI model imports the CSV export; it does not connect to a SQL warehouse.
 
 ## Performance result
 
-<!-- The before-and-after number from powerbi/performance/, and which measure it covers. -->
+Not captured: the DAX Studio before-and-after artefact for one tuned measure was cut
+(stretch; see below). `powerbi/performance/` does not exist yet.
 
 ## Key Vault secret-scope path
 
-<!-- The dbutils.secrets.get(scope=..., key=...) path the production equivalent would use. -->
+Locally the PII hash salt comes from `config/secrets.json`, which is gitignored; the
+committed `config/secrets.example.json` has placeholders only. In production:
+`dbutils.secrets.get(scope="kv-nfs-bi", key="pii-hash-salt")`
+(`docs/platform_architecture.md`).
 
 ## Time spent and what I cut and why
 
-<!-- Actual hours spent, and the stretch items dropped, in priority order. -->
+> **TODO (Jason):** actual hours spent.
+
+Cut, in priority order (correct data, tests and reproducible numbers came first):
+
+1. Unity Catalog grants, row filter and mask (`src/sql/unity_catalog_grants.sql` is a
+   stub). The access control that counts here, gold PII handling plus Power BI RLS, is
+   built and evidenced.
+2. Power BI roles other than `Regional_Analyst`. They need object-level security.
+3. The DAX Studio performance artefact.
+4. Deploying the Asset Bundle (`databricks.yml` is a stub).

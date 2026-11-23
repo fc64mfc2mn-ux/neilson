@@ -114,7 +114,7 @@ every hash, so it needs a full gold rebuild.
   contact, gold indefinitely. An erasure request deletes the lead's rows from bronze and
   silver and rebuilds gold.
 
-## Three governance risks
+## Three design risks with mitigations
 
 ### 1. No central governance strategy
 **Risk.** Access rules live in the report, not in a central place. In this build row-level

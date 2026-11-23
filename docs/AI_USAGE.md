@@ -1,73 +1,54 @@
 # AI usage
 
-> **TODO (Jason): written by the human, not the AI.** Target 300 to 500 words, with the
-> sections below. The facts underneath were drawn from `docs/AI_LOG.md` to write from;
-> delete them when the note is written.
+## Tools and what each did
+- **Genie in Databricks**: a first draft of the model, and a way to look at the data. It was
+  reference only. Nothing from it went into the repo without being rebuilt and tested, and its
+  secrets file was never committed.
+- **Claude Code (in VS Code)**: wrote the pipeline, tests and documents, one step at a time.
+  I chose it as the builder because correctness and testing had to happen at every stage.
+- **Claude (chat)**: planning, decisions, step-by-step instructions for the Power BI build
+  (which I did by hand in Power BI Desktop), and drafts of some documents.
 
-## Tool and version
+## How I worked with it
+Each step followed the same loop: tests first and confirmed failing, then the code, then
+reconciliation of counts, then a commit, then a stop for me to review. I read each report and
+made the decisions myself. I also asked Claude to read the same material and explain it back,
+so that what I had read manually and what it understood lined up and I was not mistaken.
+Every step is logged in `docs/AI_LOG.md`.
 
-## Three named tasks it was used for
+## How the design was decided
+I did not hand the design to the AI. The star schema, the fact and dimension tables, and the grain of each were worked out in discussion with Claude: it proposed options with reasons, and I questioned them and made the calls. The decisions I made are recorded in CLAUDE.md. Examples are limiting slowly changing history (SCD2) to the agent dimension, where the history is not held in Power BI; removing agent names from gold; and leaving "UNKNOWN" members out of the region and product dimensions so an unresolved value fails loudly. I chose Claude Code as the builder over Genie because correctness and testing had to happen at every stage. I reviewed each step's report before the next began, and I built the Power BI model, measures and report by hand.
 
-## One verbatim prompt
+## Where AI helped write the documents
+The first draft of the assumptions entries (including entry 13, the KPI decision) and of
+several other documents was written by Claude from the decision log and the build record. I
+read them, confirmed or corrected them, and I am responsible for what they say. The
+governance risks, this file and the reflection are written from my own points, with Claude
+tidying the wording.
 
-## One thing the tool got wrong and how I caught it
+## Mistakes the tools made, and how they were found
+- **Genie's funnel was mislabelled**: its 61,691 figure was the lead-to-call bridge, not the
+  funnel. Corrected when counts were reconciled.
+- **"4 missing FX rows" was wrong**: the missing rates were 180 CAD June spend rows.
+- **The PII scan took 47 minutes** (and ran out of memory) and had also run before the fact
+  tables existed. Rewritten as a single pass and made the last pipeline stage.
+- **An exit code was misread**: the test run showed a failure that came from reading the
+  wrong exit status, plus a test that deleted a shared gold folder. Both fixed.
+- **A timezone test assumed UTC for every region**: Australian call times were shifted, and
+  the correction was evidenced by a 426 of 426 policy-date match after a 10-hour shift. A
+  residual gap of about 8.5 hours is flagged, not corrected.
+- **An approximate expected count**: 62,830 calls was an estimate. The correct figure is
+  62,829 after the Australian conversion.
+- Others, each fixed and logged: required arguments that should have been optional, a table
+  location kept stale within a session, a commit that included an unrelated edit of mine,
+  blanked Canada and US fields, and a pasted document that still had instructions inside it.
+  The full list is in `docs/AI_LOG.md`.
 
-## One task I chose not to delegate and why
-
----
-
-## Facts to write from (from `docs/AI_LOG.md`; delete when done)
-
-**Tools and versions**
-- Claude (chat, claude.ai): discovery, data profiling, requirements breakdown, the build plan.
-- Claude Code, VS Code extension: the build. Models: Claude Opus 5.5 (steps 1 to 16b and
-  step 21), Claude Sonnet 5.5 (step 17 wrap-up and step 18). The extension version is
-  shown in the VS Code Extensions view: record it.
-- `CLAUDE.md` is committed: the priority order, hard rules, decisions and expected counts
-  that the agent worked to. Each step ran tests first, then the code, then a comparison
-  with the expected counts, then a commit and a stop for "go".
-
-**Candidate named tasks**
-- Silver calls (step 8): unioning the two call files, the AU timezone chosen by evidence
-  (all 426 AU policy dates match the linked call only after the Sydney conversion), and the
-  DO_NOT_CALL reconciliation (6,427 vs 6,311, explained in full).
-- The gold PII policy and `dim_lead` (step 11): salted hashes, age bands, postcode rules per
-  region, and the gold-wide PII scan.
-- The six named tests, the DQ gate and CI (step 13): gate lines from the defect register,
-  602 error rows expected.
-- Step 18: the Connected Call measure, expected values recomputed in pandas, and the
-  reconciliation bridge.
-
-**Verbatim prompts on record (`AI_LOG.md`)**
-- Step 13: "Step 13 is approved: the six named tests, CI, and the DQ gate (PLAN.md step 13)."
-- Step 18: "Step 18: second KPI, Connected Call to Policy Conversion Rate, plus the
-  reconciliation to Lead to Policy Conversion Rate."
-- Step 8 follow-up, first line: "Step 8 follow-up, then push. CLAUDE.md was already updated
-  by the human (expected counts, AU timezone rule, where things stand, rules 5 and 7): do
-  not edit it again, just check its diff and include it in this slice's commit."
-
-**Things it got wrong, and how each was caught**
-- Step 16b: it read pytest's piped exit code (0, from `tail`) as a pass. The full slow run
-  actually had 16 failures and 7 errors, caused by a test that deleted the shared test gold
-  directory. Caught on reading the output; fixed by deleting only the dimension tables.
-- Step 12: the PII scan built one plan branch per table. The slow tests ran 47 minutes and
-  died out of memory. Rewritten as one pass (30 s).
-- Step 17: renaming the `Measures` table to `Key Measures` broke the DAX parser test regex
-  (11 failures). Caught by the test run, and fixed in the test.
-- Step 18: the indicative 20.5% for the Ops-style rate could not be reproduced (18.56% as
-  built). It asked before building, and documented the gap instead of tuning to match.
-- Earlier attempt (reference repo): a "4 missing FX" spend claim was wrong. The spend
-  reconciliation is 2,224 = 2,001 + 40 + 180 + 3.
-- A test comment in step 9 claimed 4 of the 40 exact spend copies were CAD June. Caught in
-  review.
-
-**Not delegated (kept by hand)**
-- The final KPI wording: `ASSUMPTIONS.md` entry 13 and the recommendation to both directors.
-- The three governance risks.
-- Building the Power BI model, the RLS role and the view-as evidence in Power BI Desktop on
-  the Windows VM. The agent cannot run Desktop, so it prepared `measures.dax`, the model
-  design and the expected values, and the human checked the measures against them.
-- Approving the Java 17 install and the PyYAML dependency. (pandas was added as a test-only
-  dependency at step 18, because the prompt asked for a pandas recomputation.)
-- The decisions it asked for: option C for the KPI; the business-hours scope and the date
-  axes at step 18; the AU postcode and consent labelling rules.
+## What I checked myself
+- I read every step report and made the decisions that are recorded in `CLAUDE.md`.
+- I built the Power BI model, measures and report by hand and compared the measure values
+  with the independently computed expected values.
+- I tested row-level security with "view as" for three users (ANZ manager, UK analyst, and a
+  user with no mapping) and kept the screenshots.
+- I recorded the model walkthrough myself.
+- I reviews each raw file before and after ingestion into Databricks.

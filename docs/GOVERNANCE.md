@@ -114,10 +114,43 @@ every hash, so it needs a full gold rebuild.
   contact, gold indefinitely. An erasure request deletes the lead's rows from bronze and
   silver and rebuilds gold.
 
-## Three design risks with mitigations
+## Three governance risks
 
-> **TODO (Jason): written by the human, not the AI.** Three risks found in this data, each
-> with a mitigation.
+### 1. No central governance strategy
+**Risk.** Access rules live in the report, not in a central place. In this build row-level
+security is a Power BI role fed by one mapping table (`gold.bridge_user_region`). That works
+for a case study, but if every team builds its own reports with its own rules, the rules
+drift, nobody owns them, and a shared or generic login can see more than it should.
+
+**Control.** Put row-level rules in a central place, Unity Catalog row filters in
+Databricks, driven by the same mapping table, so every tool that reads the data gets the
+same answer. Give each person their own sign-in with multi-factor authentication instead of
+general access to Power BI. Limits to state honestly: Unity Catalog row filters cannot run in
+this local build, and a Power BI Import model refreshed with a shared service account does
+not pass the viewer's identity to Unity Catalog, so the Power BI role is the control that
+actually runs here.
+
+### 2. Personal data requirements are overlooked because managers want names
+**Risk.** Business users often ask for names, phone numbers and call notes because they make
+a report feel useful. PII then spreads into reports, exports and screenshots where it is
+hard to find and hard to remove.
+
+**Control.** Minimise by default. Gold carries salted hashes, normalised phone formats,
+age bands and outward postcodes only. Names, call notes and recording URLs never reach gold,
+and the report uses `dim_lead_nopii`. A leak scan runs as the last stage of the pipeline and
+fails the build. Anyone who needs a name goes through a request with a stated purpose rather
+than a column added to the model.
+
+### 3. Small groups can identify individual agents (proposed; confirm or replace)
+**Risk.** Agent performance by seniority band is HR-sensitive data. In the smaller regions
+(Australia, Canada, US) a band can be one or two people, so a chart of conversion by band
+points at a named person.
+
+**Control.** The seniority visual has a visual-level filter, `Agents in Group >= 3`, so a
+band with fewer than three agents is hidden. The "view as" test for `au.analyst` shows only
+the Core band remaining. Weakness to state: this is a report-level filter, not a data-level
+one, so an analyst who builds their own report on the model would not inherit it. A production
+version would put the rule in the semantic layer or the central policy.
 
 ## Residual risk accepted
 

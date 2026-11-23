@@ -30,9 +30,18 @@ for 17, 25 and 26 in `DATA_CLASSIFICATION.md`, under the same number.
 
 12\. **Fiscal quarter.** Choice: calendar quarters; Q2 2026. Reverse: fiscal columns in `dim_date`.
 
-13\. **Funnel conversion rate.**
-> **TODO (Jason): written by the human, not the AI.** Ambiguity, options, choice, reason,
-> reverse. Reasoning and the earlier AI draft: `KPI_DECISION_LOG.md`.
+13. **Two conversion definitions, both kept (option C).**
+The Regional Marketing Director (UK and Ireland) counts policies over all leads captured,
+by the month the lead was created and its first-touch campaign: a measure of acquisition
+efficiency. The Sales Operations Director (International) counts policies over connected
+calls, excluding duplicate leads and leads created outside business hours, by the month the
+policy started and the last-call agent: a measure of agent effectiveness. These are
+different questions at different grains, so I did not pick one. The model has two certified
+measures, `Lead to Policy Conversion Rate` and `Connected Call to Policy Conversion Rate`,
+and nothing is called plain "Conversion Rate". For Q2 2026 they give 9.53% and 18.56%.
+`docs/KPI_RECONCILIATION.md` walks from one to the other in six steps with no unexplained
+difference, and `docs/KPI_DECISION_LOG.md` records the options rejected and why.
+Reversing the decision means editing one measure, not rebuilding data.
 
 14\. **YAML parser.** Choice: add pinned `pyyaml`. Reverse: JSON config.
 

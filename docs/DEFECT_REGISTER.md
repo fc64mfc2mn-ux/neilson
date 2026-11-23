@@ -51,3 +51,181 @@ settles it is named); **Finding** (written up for the owner, data not changed).
 3. Minor-unit spend rows that would overstate CPL roughly 80-fold (defect 11).
 
 Each needs a number, the method that produced it, and the business action it implies.
+
+## Assumption detail (moved from `ASSUMPTIONS.md`)
+
+`docs/ASSUMPTIONS.md` keeps one short entry per assumption, to the brief's length. The full
+evidence for each entry is kept here under the same number. Entries 17, 25 and 26 (access
+and PII) are in `DATA_CLASSIFICATION.md`; entry 13 is in `KPI_DECISION_LOG.md`.
+
+1\. **Region groupings.** *Ambiguity:* the director titles say "UK and Ireland" and
+   "International"; `ref_region` holds only UK, CA, AU and US. *Options:* map by title;
+   report Ireland as missing. *Choice:* UK and Ireland = UK; International = CA, AU, US.
+   *Reason:* these are the only regions in the data. *Reverse:* edit the region-group
+   column in `gold.dim_region`.
+
+2\. **Connected calls.** *Ambiguity:* which dispositions mean a conversation. *Options:*
+   CONNECTED only; CONNECTED plus later stages. *Choice:* CONNECTED, QUOTED,
+   APPLICATION_STARTED, SOLD. *Reason:* matches the brief's `Contact Rate`; a quote or
+   sale implies contact. *Reverse:* change the disposition list behind the connected flag
+   in silver calls.
+
+3\. **Policy status.** *Ambiguity:* which policies count as converted. *Options:* all;
+   exclude NTU; also exclude CANCELLED and LAPSED. *Choice (decided, step 16):* exclude
+   NTU only. *Reason:* the legacy procedure excludes NTU, and a cancelled or lapsed policy
+   was still sold; conversion is the sale, retention is another measure. Measured
+   (`findings_powerbi.sql: conversion_by_status_rule`): the stricter rule lowers the rate
+   from 9.53% to 8.11% (1.42 points, 14.9% relative); by region 0.82 to 1.64 points, 13.4%
+   to 15.9% relative, so the regional ranking is unchanged. *Reverse:* the status filter
+   in `Policies Linked to Surviving Leads` (`powerbi/measures.dax`).
+
+4\. **Channel source of truth.** *Ambiguity:* lead and campaign channel can disagree.
+   *Options:* lead channel; campaign channel. *Choice:* campaign channel, after
+   normalising labels to `ref_channel`. *Reason:* spend is recorded by campaign; after
+   normalisation only 600 of 47,687 leads disagree, scattered across all channel pairs
+   (`findings_reference.sql`). *Reverse:* switch the `channel_key` source in gold.
+
+5\. **Call-file timezones.** *Ambiguity:* neither call file states its timezone.
+   *Options:* UTC; region local time (DST-aware); a fixed offset. *Choice:* UK, CA and
+   US as UTC; AU converted from `Australia/Sydney`. *Reason:* a policy's application
+   date equals its linked call's date for every UK, CA and US policy as stored, and for
+   all 426 AU policies only after the conversion (248 before); AU lead timestamps show
+   no shift. After conversion AU first calls still come a median 512 min after the lead
+   (22 to 45 elsewhere): flagged as an open observation, not corrected. *Reverse:*
+   `calls.source_timezone` in config. Queries: `src/sql/findings_calls.sql`.
+
+6\. **Minor-unit spend.** *Ambiguity:* some spend sits about 100x too high. *Options:*
+   keep; divide by 100; quarantine. *Evidence:* two whole campaigns, CMP-1061 (AUD) and
+   CMP-1062 (GBP), have median CPM 92x and 99.8x their currency's; every other campaign
+   is 0.88 to 1.05x. Their CPC is 100x too, but click-through is normal, so spend is the
+   wrong field. *Rule:* a row with CPM 20x or more its currency median is divided by 100
+   if the result is 0.5 to 2x; otherwise quarantined as ambiguous. 181 rescaled, none
+   ambiguous (normal rows reach 1.51x, minor rows start at 68x). Blended CPL: £319.95
+   before, £34.39 after. *Reverse:* `spend.minor_units` in config.
+
+7\. **Missing CAD rate for June.** *Options:* carry May forward; average the months;
+   quarantine. *Choice:* quarantine CAD June spend at error severity, so the DQ gate
+   fails. *Reason:* carrying May forward would invent a Treasury rate, and the brief
+   forbids silent nulls. *Reverse:* load the rate once Treasury supplies it, then rerun.
+
+8\. **SCD2 effective dates.** *Ambiguity:* some agents appear twice with a different team
+   or seniority and no dates. *Options:* first-seen load date; file row order; current
+   state only. *Choice (proxy):* versions in bronze `_source_row` order. One version:
+   valid 2026-01-01 to 9999-12-31. Two: the earlier 2026-01-01 to 2026-03-31, the later
+   current from 2026-04-01 (reporting start); `valid_to` inclusive. A call takes the
+   version valid on its UTC date. Three or more versions stop the stage. The later
+   AG0008 and AG0037 rows name UK teams; those team values are quarantined and the
+   earlier team kept (defect 27). *Reason:* the source has no dates, so the proxy is
+   stated, not hidden. *Reverse:* replace the dates with HR effective dates.
+
+9\. **Business hours.** *Ambiguity:* Ops excludes leads "outside regional business
+   hours" without defining weekends or holidays. *Options:* `ref_region` hours every day;
+   weekdays only; weekdays minus holidays. *Choice:* Monday to Friday, start inclusive
+   and end exclusive, in the region's own timezone. No holiday calendar. *Reason:* the Ops
+   note names overnight and weekend; the pack has no holiday data. *Reverse:* change the
+   flag logic or add a holiday table.
+   Applied at step 12 as `lead_in_business_hours_flag` (`fact_lead`, `fact_lead_funnel`);
+   the weekend and holiday rule is open question c.
+
+10\. **Attribution window.** *Ambiguity:* `ref_channel` gives `attribution_window_days`
+    (0 to 30) but nothing says whether it limits which policies count. *Options:* ignore
+    it; count only policies within the window. *Choice (decided):* not applied; impact 164
+    of 4,767 lead-attributed policies (3.4%) apply after their channel's window
+    (`findings_policy.sql: policies_outside_attribution_window`). Only relevant to
+    `Cost Per Policy (GBP)` (measure 10), not core. *Reverse:* one filter in the
+    lead-attributed policy measures. Open question h asks Marketing to confirm.
+
+11\. **Policies with no lead.** *Options:* drop; keep against an `UNKNOWN` lead; keep with
+    a NULL key. *Choice:* keep them in `gold.fact_policy` with a NULL `lead_key`, and
+    exclude them from lead-attributed measures. Power BI shows them as blank. *Reason:*
+    they are real sales but cannot be attributed. `gold.dim_lead` is one row per
+    deduplicated lead, so an `UNKNOWN` member would add a lead that does not exist.
+    *Reverse:* a measure filter.
+
+12\. **Fiscal quarter.** *Ambiguity:* the pack gives no fiscal calendar. *Choice:*
+    calendar quarters, so the reporting period is Q2 2026. *Reverse:* add fiscal columns
+    to `gold.dim_date`.
+
+14\. **Dependency addition: PyYAML.** *Ambiguity:* the stack is fixed, but the brief requires
+    a YAML config, and neither the starter `requirements.txt` nor PySpark includes a YAML
+    parser. *Options:* add a parser; write one by hand; switch the config to JSON.
+    *Choice:* add `pyyaml==6.0.2`, pinned, used only by `src/common/config.py`. *Reason:*
+    the brief names `config/config.yaml`; a hand-written parser would be fragile.
+    *Reverse:* remove the pin and load a JSON config instead.
+
+15\. **Bronze reruns.** *Ambiguity:* bronze must be append-only, but a second run of the one
+    command must not double every row. *Options:* drop and reload each run; append
+    blindly; append only changed files. *Choice:* each landing is a batch with one
+    `_ingest_ts`; its content fingerprint goes in `bronze.ingest_log`. An unchanged file
+    appends nothing, a changed file appends a new batch, and silver reads the latest
+    batch per file. *Reason:* keeps bronze append-only and auditable, and makes reruns
+    idempotent. Bronze also stores `_source_row`, the record's position in its file
+    (from 1, header excluded), outside `_row_hash`. *Reverse:* delete the file's
+    `bronze.ingest_log` rows to force a reload.
+
+16\. **Agents with no region.** *Ambiguity:* AG0007 and AG0035 have no roster region.
+    *Options:* leave `UNKNOWN`; use the team prefix. *Choice:* team prefix (UK). *Reason:*
+    both take calls only in the UK, and the prefix matches the region on 41 of 43 rows
+    (`findings_reference.sql`). *Reverse:* drop the fallback in `conform_agents`.
+
+18\. **Implausible dates of birth.** *Ambiguity:* the register flags about 312 DOBs.
+    *Options:* quarantine the lead; null the DOB. *Choice:* null a DOB when the whole-year
+    age at lead creation is under 18 or over 100; keep the lead. That nulls 60: before
+    1920, 20 of 20; 2008 to today, 20 of 272 (the other 252 were born in 2008 and are
+    18); future, 20 of 20 (`dob_register_bands`). *Reason:* the leads are otherwise
+    normal. *Reverse:* `MIN_AGE`/`MAX_AGE` in `src/silver/leads.py`.
+
+19\. **Dedup detail.** *Ambiguity:* "within 48 hours" of the previous match or of the
+    first lead; phone formats vary. *Choice:* chained gaps, linked across email and phone;
+    phone compared on digits only. *Reason:* gives 758 duplicates and 47,201 survivors.
+    *Reverse:* `src/silver/dedupe_leads.py`.
+
+20\. **Calls on unresolvable leads (defect 17).** *Ambiguity:* some calls name a lead that
+    is not a surviving lead. *Options:* quarantine; an `UNKNOWN` lead; a null key.
+    *Choice:* keep the calls, flagged in silver. In `gold.fact_call` they have a null
+    `lead_key` and `lead_match_status` says why: 1,094 `lead_not_found` (ids in no lead
+    file, all `LD-GHOST-<region>-<n>`) and 45 `lead_quarantined` (leads quarantined at
+    step 7). They are not in `gold.bridge_lead_call` (61,690 = 62,829 - 1,139), so they
+    never reach the lead-grain funnel. AG9001 to AG9004 map to the `UNKNOWN` agent.
+    *Reason:* `dim_lead` is one row per real lead (as assumption 11), and the calls are
+    real agent work for handle time and grade of service. *Reverse:* quarantine the
+    flagged rows in `src/silver/calls.py`.
+
+21\. **Negative, zero and click-less spend (defect 10).** *Negatives (3):* none offsets a
+    positive of its campaign, each is that day's only row at under 0.3x the median:
+    quarantined, not netted. *Zeros (200):* kept; 91 are ORGANIC (no media cost), the
+    rest have tiny delivery; the 109 on paid channels are flagged. *Null clicks (17):*
+    kept as null, never 0, flagged; spend and impressions are present. *Reverse:*
+    `src/silver/spend.py`.
+
+22\. **Spend outside campaign dates (defect 9).** *Choice:* the spend counts and is
+    flagged (325 rows), because the media cost was incurred whatever the plan said; two
+    campaigns end before they start. *Reverse:* a measure filter on
+    `outside_campaign_dates`.
+
+23\. **Conflicting policy copies (defect 19).** *Choice:* merge; the earliest copy wins a
+    value conflict, a null is filled from the other copy. *Reason:* the earliest matches
+    the linked call's agent (1 of 1) and monthly x 12 (2 of 3; the later copy 0 of 3).
+    *Reverse:* `merge_conflicting` in `src/silver/policy.py`.
+
+24\. **Surrogate key width.** *Choice:* the first 52 bits of SHA-256 of the natural key,
+    below 2^53 so Power BI's double-precision numbers hold every key exactly (60 bits did
+    not); deterministic, with a collision test per dimension. *Reverse:* `KEY_HEX_DIGITS`
+    in `src/gold/build_dimensions.py`.
+
+27\. **Policy premium in GBP.** *Ambiguity:* which month's rate. *Choice (decided):* the
+    application month (the sale event; spend also uses its own activity month). No rate
+    is invented: 675 policies keep a null `annual_premium_gbp`, flagged
+    `gbp_rate_missing` and in `dq_exception` (`policy_fx_rate_missing`, warning). By
+    cause and quarter (`findings_policy.sql: policy_gbp_missing_by_cause`): 517 CAD June,
+    all inside Q2 (Q2 coverage 89.7% of 5,014 policies); 158 July, any currency, all
+    outside Q2 (0% coverage). `Average Annual Premium (GBP)` must state its coverage, the
+    share of policies with a GBP premium. *Reverse:* load the rates and rerun, or switch
+    to the policy start month in `policy_gbp` (`src/gold/build_facts.py`).
+
+28\. **Funnel definitions (step 12).** First-touch campaign: the surviving lead is the
+    earliest in its cluster, so its campaign. `last_call_agent_key`: the last call on or
+    before the application date, else the last call. Never called: null call keys and
+    timings, zero counts, SLA flag false. `quoted_flag` and `application_flag` also count
+    a linked policy. `days_lead_to_policy` runs to the application date. *Reverse:*
+    `lead_funnel` in `src/gold/build_lead_funnel.py`.

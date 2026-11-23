@@ -217,3 +217,33 @@ and `recording_url` (tier 3); policy `underwriting_decision` (tier 3); agent `ag
 | `gold.bridge_user_region` | `region_code` | 1 | `ALL` kept as stated |
 | `gold.bridge_user_region` | `region_key` | 1 | Null for `ALL` |
 | `gold.bridge_user_region` | `all_regions_flag` | 1 | True for `ALL` |
+
+## Assumption detail (moved from `ASSUMPTIONS.md`)
+
+Full text of the access and PII assumptions; `docs/ASSUMPTIONS.md` keeps a short entry
+under the same number.
+
+17\. **Row-level security source.** *Ambiguity:* where region entitlements live. *Options:*
+    per-report role rules; a wide denormalised table; one bridge. *Choice:*
+    `gold.bridge_user_region` drives both the Power BI role and the Unity Catalog row
+    filter, matched on `region_key`; `ALL` is unrestricted, unmapped users see nothing.
+    *Reason:* one source, star schema kept. *Reverse:* edit the bridge.
+
+25\. **Lead PII generalisation (step 11).** *Postcode, by region, from the formats seen:*
+    UK `A9 9AA`, `AA9 9AA`, `AA99 9AA` keep the outward code (before the space); CA
+    `A9A 9A9` keeps the forward sortation area (3 characters); US `99999` keeps ZIP3; AU
+    `9999` has no outward part and the full code would be the raw value, so the first 3
+    digits. A postcode not in its region's format is withheld, not guessed (defect 29).
+    *Phone:* E.164 from the digits (UK, AU, NANP national and international forms), so
+    one number written four ways hashes the same. *Age band:* decades of whole-year age at
+    lead creation, `18-19` first, `90+` last, `UNKNOWN` for a null DOB. *Consent:* the
+    latest event in `silver.consent_current`; a lead with no event keeps its capture flag,
+    labelled `lead_capture`. *Reverse:* `POSTCODE_RULES`, `phone_e164`, `age_band` in
+    `src/gold/apply_pii_policy.py`.
+
+26\. **Consent labelling.** *Choice:* `gold.dim_lead.consent_marketing_current` takes the
+    latest consent event; with no event, the capture-time flag, and
+    `consent_marketing_source` says which (`consent_events` or `lead_capture`). The AU
+    postcode rule is in assumption 25. *Reason:* the capture flag is the only evidence for
+    leads with no events, but it is weaker (defect 25 shows it can be stale), so measures
+    that use consent filter on the source. *Reverse:* null consent for `lead_capture`.

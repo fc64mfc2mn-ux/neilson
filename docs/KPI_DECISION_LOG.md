@@ -90,3 +90,24 @@ Defect register references (27 defects in total; see `DEFECT_REGISTER.md` for st
 | `attribution_window_days` | Assumption 10 | Decide at step 12 |
 | "International" = CA, AU, US | Assumption 1 | Decided |
 | Call-file timezones (business-hours flag, first call) | Defect 15; assumption 5 | Decide at step 8 |
+
+## Earlier draft of `ASSUMPTIONS.md` entry 13 (AI-drafted, kept for reference)
+
+Entry 13 in `ASSUMPTIONS.md` is now a placeholder for the human's own wording. The earlier
+AI draft, unchanged:
+
+13\. **Funnel conversion rate (DRAFT, to be rewritten by Jason).** *Ambiguity:* the two
+    directors define conversion on four axes. Only the denominator truly collides:
+    Marketing uses all leads (lead grain), Ops uses connected calls (call grain).
+    Population, attribution and period are different scopes or date roles, not
+    conflicts. *Options:* A, Marketing's definition for all; B, Ops's for all; C, two
+    certified, explicitly named measures plus a reconciliation; D, one measure with a
+    definition slicer. *Choice:* C. `Lead to Policy Conversion Rate` (lead grain,
+    lead-created date, first-touch campaign) and `Connected Call to Policy Conversion
+    Rate` (call grain, business-hours leads, policy-start date, last-call agent). A
+    reconciliation view steps between the two one axis at a time. No measure is called
+    plain "Conversion Rate". *Reason:* forcing either grain on the other changes what the
+    number means. A and B override one director, and D puts two answers behind one name.
+    The BI Manager's note allows named variants. *Reverse:* every axis is a model column
+    or relationship, so a change is one DAX measure, its description and its
+    `KPI_DEFINITIONS.md` row. No data rebuild.

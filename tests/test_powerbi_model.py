@@ -417,7 +417,7 @@ def gold(spark, real_gold_all):
 
 @pytest.mark.slow
 def test_real_status_rule_effect_overall_and_by_region(spark, gold):
-    """Quoted in docs/ASSUMPTIONS.md (3) and docs/KPI_DECISION_LOG.md."""
+    """Quoted in docs/DEFECT_REGISTER.md (assumption 3 detail) and docs/KPI_DECISION_LOG.md."""
     rows = {r.region_code: r for r in run_query(spark, "conversion_by_status_rule")}
     got = {
         k: (r.leads, r.policies_all, r.policies_excl_ntu, r.policies_inforce_only,

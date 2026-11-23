@@ -11,7 +11,7 @@
 
 ## Tools and versions
 - Claude Code in VS Code, version 2.1.330; model Claude Opus 5.5 (most steps) and Claude Sonnet 5.5 (steps 17 and 18).
-- Claude (chat, claude.ai), model [MODEL NAME AS SHOWN IN THE APP].
+- Claude (chat, claude.ai), model Claude Sonnet 5.5.
 - Databricks Genie, a workspace feature with no version number; used only for exploration.
 
 ## How I worked with it
@@ -96,7 +96,7 @@ docs). Push, confirm CI is green, then report: the three headline numbers, the
 bridge table, and any decision you need from me. Do not touch the .pbix.
 ~~~
 
-I chose it because it shows the pattern I used throughout: definitions stated up front, tests first, a requirement to stop and ask when something is ambiguous, and a ban on touching the .pbix. When Claude Code asked which population to use, I took the option that matched the decision log and told it not to chase the earlier 20.5% figure.
+I chose it because it shows the pattern I used throughout: definitions stated up front, tests first, a requirement to stop and ask when something is ambiguous, and a ban on touching the .pbix. When Claude Code asked which population to use, I took the option that matched the decision log, and I accepted its finding that the earlier 20.5% figure could not be reproduced, with the gold tables as the source of truth.
 
 ## What I checked myself
 - I read every step report and made the decisions that are recorded in `CLAUDE.md`.
